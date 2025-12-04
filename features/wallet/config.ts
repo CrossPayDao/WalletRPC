@@ -1,5 +1,6 @@
 
 import { ChainConfig, SafeContracts } from './types';
+import { SUPPORTED_CHAINS } from '../../data/chains';
 
 // --- Safe Configuration ---
 
@@ -52,68 +53,13 @@ export const ERC20_ABI = [
   "function name() view returns (string)"
 ];
 
-// --- Default Chains ---
+// --- Config Merger ---
 
-export const DEFAULT_CHAINS: ChainConfig[] = [
-  {
-    id: 1,
-    name: 'Ethereum Mainnet',
-    defaultRpcUrl: 'https://eth.llamarpc.com',
-    currencySymbol: 'ETH',
-    explorerUrl: 'https://etherscan.io',
-    chainType: 'EVM',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },
-      { symbol: 'USDC', name: 'USD Coin', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
-    ]
-  },
-  {
-    id: 56,
-    name: 'BNB Smart Chain',
-    defaultRpcUrl: 'https://binance.llamarpc.com',
-    currencySymbol: 'BNB',
-    explorerUrl: 'https://bscscan.com',
-    chainType: 'EVM',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD', address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18 },
-      { symbol: 'BUSD', name: 'Binance USD', address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', decimals: 18 },
-    ]
-  },
-  {
-    id: 1029,
-    name: 'BTT Donau Testnet',
-    defaultRpcUrl: 'https://pre-rpc.bt.io/',
-    currencySymbol: 'BTT',
-    explorerUrl: 'https://testnet.bttcscan.com',
-    chainType: 'EVM',
-    tokens: [
-      { symbol: 'USDT_b', name: 'USDT (BSC)', address: '0x834982c9B0690ED7CA35e10b18887C26c25CdC82', decimals: 6 },
-      { symbol: 'USDT_t', name: 'USDT (TRON)', address: '0x6d96aeae27af0cafc53f4f0ad1e27342f384d56d', decimals: 6 },
-      { symbol: 'USDT_e', name: 'USDT (ETH)', address: '0xDf095861F37466986F70942468f7601F7098D712', decimals: 6 }
-    ],
-    isTestnet: true
-  },
-  {
-    id: 728126428,
-    name: 'Tron Mainnet',
-    defaultRpcUrl: 'https://api.trongrid.io',
-    currencySymbol: 'TRX',
-    explorerUrl: 'https://tronscan.org',
-    chainType: 'TRON',
-    tokens: [
-      { symbol: 'USDT', name: 'Tether USD', address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', decimals: 6 }
-    ]
-  },
-  {
-    id: 2494104990,
-    name: 'Tron Nile Testnet',
-    defaultRpcUrl: 'https://nile.trongrid.io',
-    currencySymbol: 'TRX',
-    explorerUrl: 'https://nile.tronscan.org',
-    chainType: 'TRON',
-    isTestnet: true,
-    tokens: [
-        { symbol: 'USDT', name: 'Tether USD (BTT)', address: 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj', decimals: 6 }
-    ]
-  }
-];
+/**
+ * Merges the modular chain data into the application's configuration format.
+ */
+export const DEFAULT_CHAINS: ChainConfig[] = SUPPORTED_CHAINS.map(chainData => ({
+  ...chainData,
+  tokens: chainData.tokens.map(t => ({ ...t, isCustom: false })), // Ensure tokens are marked as non-custom default
+  isCustom: false
+}));

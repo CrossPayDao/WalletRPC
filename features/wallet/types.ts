@@ -1,23 +1,37 @@
 
-export interface TokenConfig {
+export interface TokenDefinition {
   symbol: string;
   name: string;
   address: string;
   decimals: number;
   logo?: string;
+}
+
+export interface TokenConfig extends TokenDefinition {
   isCustom?: boolean;
 }
 
-export interface ChainConfig {
+export interface NetworkDefinition {
   id: number;
   name: string;
   defaultRpcUrl: string;
   currencySymbol: string;
   explorerUrl: string;
-  tokens: TokenConfig[];
   isTestnet?: boolean;
-  isCustom?: boolean;
   chainType?: 'EVM' | 'TRON';
+}
+
+/**
+ * Represents a single file in the data/chains directory.
+ * Contains network configuration and default token list.
+ */
+export interface ChainData extends NetworkDefinition {
+  tokens: TokenDefinition[];
+}
+
+export interface ChainConfig extends NetworkDefinition {
+  tokens: TokenConfig[];
+  isCustom?: boolean;
 }
 
 export interface TrackedSafe {
