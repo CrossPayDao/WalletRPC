@@ -1,4 +1,5 @@
 
+
 import { ChainData } from '../../features/wallet/types';
 
 export const bsc: ChainData = {
@@ -12,13 +13,15 @@ export const bsc: ChainData = {
     'https://1rpc.io/bnb'
   ],
   currencySymbol: 'BNB',
-  explorer: {
-    name: 'BscScan',
-    key: 'bscscan',
-    url: 'https://bscscan.com',
-    txPath: 'https://bscscan.com/tx/{txid}',
-    addressPath: 'https://bscscan.com/address/{address}'
-  },
+  explorers: [
+    {
+      name: 'BscScan',
+      key: 'bscscan',
+      url: 'https://bscscan.com',
+      txPath: 'https://bscscan.com/tx/{txid}',
+      addressPath: 'https://bscscan.com/address/{address}'
+    }
+  ],
   chainType: 'EVM',
   tokens: [
     { symbol: 'USDT', name: 'Tether USD', address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18 },

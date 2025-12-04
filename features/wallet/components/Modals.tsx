@@ -1,8 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, Github, ExternalLink, AlertCircle, Search, Server, ChevronDown, ChevronUp, Globe, Radio } from 'lucide-react';
+import { X, Trash2, Github, ExternalLink, AlertCircle, Search, Server, ChevronDown, ChevronUp, Globe, Radio, Compass } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { ChainConfig, TokenConfig } from '../types';
+import { getActiveExplorer } from '../utils';
 
 // --- Chain Modal (Global Settings) ---
 
@@ -41,6 +43,8 @@ export const ChainModal: React.FC<ChainModalProps> = ({
   }, [isOpen, initialConfig]);
 
   if (!isOpen) return null;
+
+  const activeExplorer = getActiveExplorer(initialConfig);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -129,6 +133,41 @@ export const ChainModal: React.FC<ChainModalProps> = ({
             </div>
           </div>
 
+          {/* Block Explorer Configuration */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2 text-indigo-600">
+              <Compass className="w-5 h-5" />
+              <span className="font-bold text-sm uppercase tracking-wide">Block Explorer</span>
+            </div>
+            
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+               <label className="text-xs font-bold text-slate-500 block mb-2">Preferred Explorer</label>
+               {initialConfig.explorers && initialConfig.explorers.length > 0 ? (
+                 <div className="space-y-3">
+                   <select
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                      value={config.defaultExplorerKey || initialConfig.explorers[0].key}
+                      onChange={(e) => setConfig({ ...config, defaultExplorerKey: e.target.value })}
+                   >
+                      {initialConfig.explorers.map(e => (
+                        <option key={e.key} value={e.key}>{e.name}</option>
+                      ))}
+                   </select>
+                   
+                   {/* Explorer Link Preview */}
+                   {activeExplorer && activeExplorer.url && (
+                     <a href={activeExplorer.url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-indigo-600 hover:text-indigo-800 font-medium">
+                       <span>Open {activeExplorer.name} Website</span>
+                       <ExternalLink className="w-3 h-3 ml-1" />
+                     </a>
+                   )}
+                 </div>
+               ) : (
+                  <div className="text-sm text-slate-400 italic">No explorers configured for this chain.</div>
+               )}
+            </div>
+          </div>
+
           {/* Advanced Info Toggle */}
           <div>
              <button 
@@ -155,18 +194,6 @@ export const ChainModal: React.FC<ChainModalProps> = ({
                             <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Currency</label>
                             <div className="font-mono text-sm text-slate-700 font-medium">{initialConfig.currencySymbol}</div>
                         </div>
-                      </div>
-
-                      <div>
-                          <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Block Explorer</label>
-                          <div className="flex items-center text-sm text-slate-700">
-                             <span className="mr-2 font-medium">{initialConfig.explorer?.name}</span>
-                             {initialConfig.explorer?.url && (
-                                <a href={initialConfig.explorer.url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800">
-                                   <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                             )}
-                          </div>
                       </div>
 
                       {/* Contribution Link */}

@@ -1,4 +1,5 @@
 
+
 import { ChainData } from '../../features/wallet/types';
 
 export const tronNile: ChainData = {
@@ -10,13 +11,15 @@ export const tronNile: ChainData = {
     'https://nile.trongrid.io/jsonrpc'
   ],
   currencySymbol: 'TRX',
-  explorer: {
-    name: 'TronScan (Nile)',
-    key: 'tronscan_nile',
-    url: 'https://nile.tronscan.org',
-    txPath: 'https://nile.tronscan.org/#/transaction/{txid}',
-    addressPath: 'https://nile.tronscan.org/#/address/{address}'
-  },
+  explorers: [
+    {
+      name: 'TronScan (Nile)',
+      key: 'tronscan_nile',
+      url: 'https://nile.tronscan.org',
+      txPath: 'https://nile.tronscan.org/#/transaction/{txid}',
+      addressPath: 'https://nile.tronscan.org/#/address/{address}'
+    }
+  ],
   chainType: 'TRON',
   isTestnet: true,
   tokens: [

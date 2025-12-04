@@ -1,4 +1,5 @@
 
+
 import { useState, useEffect } from 'react';
 import { DEFAULT_CHAINS } from '../config';
 import { ChainConfig, TokenConfig, TrackedSafe, SafePendingTx } from '../types';
@@ -53,7 +54,18 @@ export const useWalletStorage = () => {
          
          const mergedChains = DEFAULT_CHAINS.map(defaultChain => {
             const override = customChainConfigs.find(c => c.id === defaultChain.id);
-            return override ? { ...defaultChain, ...override, isCustom: true } : defaultChain;
+            // 这里我们特别注意保留 chainData 文件中的静态 explorers 列表
+            // 用户覆盖的只是 defaultExplorerKey 和 defaultRpcUrl 等字段
+            if (override) {
+               return { 
+                  ...defaultChain, 
+                  ...override, 
+                  // 强制使用最新的 explorers 列表，防止 storage 中存的旧数据覆盖了新加的 explorer
+                  explorers: defaultChain.explorers, 
+                  isCustom: true 
+               };
+            }
+            return defaultChain;
          });
 
          // 添加纯新增的链 (DEFAULT 中不存在的)

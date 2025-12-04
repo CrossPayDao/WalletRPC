@@ -1,5 +1,5 @@
 {
   "name": "Nexus Vault",
-  "description": "High-performance Non-Custodial EVM & Safe Wallet",
+  "description": "High-performance RPC Wallet",
   "requestFramePermissions": []
 }

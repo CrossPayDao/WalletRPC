@@ -1,4 +1,5 @@
 
+
 import { ChainData } from '../../features/wallet/types';
 
 export const bttDonau: ChainData = {
@@ -10,13 +11,15 @@ export const bttDonau: ChainData = {
     'https://donau.bttc.network'
   ],
   currencySymbol: 'BTT',
-  explorer: {
-    name: 'BTTCScan',
-    key: 'bttcscan',
-    url: 'https://testnet.bttcscan.com',
-    txPath: 'https://testnet.bttcscan.com/tx/{txid}',
-    addressPath: 'https://testnet.bttcscan.com/address/{address}'
-  },
+  explorers: [
+    {
+      name: 'BTTCScan',
+      key: 'bttcscan',
+      url: 'https://testnet.bttcscan.com',
+      txPath: 'https://testnet.bttcscan.com/tx/{txid}',
+      addressPath: 'https://testnet.bttcscan.com/address/{address}'
+    }
+  ],
   chainType: 'EVM',
   isTestnet: true,
   tokens: [

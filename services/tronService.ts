@@ -83,6 +83,10 @@ export const TronService = {
     return "0";
   },
 
+  getTransactionInfo: async (host: string, txId: string) => {
+    return TronService.rpcCall(host, '/wallet/gettransactioninfobyid', { value: txId });
+  },
+
   // Transactions
   sendTrx: async (host: string, privateKey: string, toBase58: string, amountSun: number) => {
     const fromBase58 = TronService.addressFromPrivateKey(privateKey);

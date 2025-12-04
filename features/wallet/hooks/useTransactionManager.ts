@@ -68,11 +68,13 @@ export const useTransactionManager = ({
   const noncePromiseRef = useRef<Promise<number> | null>(null);
 
   /**
-   * 背景轮询：检查状态为 'submitted' 的 EVM 交易是否已确认
+   * 背景轮询：检查状态为 'submitted' 的交易是否已确认
    */
   useEffect(() => {
-    if (!provider || transactions.length === 0) return;
+    if (transactions.length === 0) return;
 
+    // Filter relevant transactions (submitted and belonging to current chain)
+    // Note: We also check activeChain.chainType inside the loop to dispatch logic
     const submittedTxs = transactions.filter(tx => tx.status === 'submitted' && tx.hash && tx.chainId === activeChain.id);
     if (submittedTxs.length === 0) return;
 
@@ -83,7 +85,7 @@ export const useTransactionManager = ({
         for (const tx of submittedTxs) {
             try {
                 // EVM Logic
-                if (activeChain.chainType !== 'TRON' && tx.hash) {
+                if (activeChain.chainType !== 'TRON' && tx.hash && provider) {
                     const receipt = await provider.getTransactionReceipt(tx.hash);
                     if (receipt && receipt.status !== null) {
                         const index = updatedList.findIndex(t => t.id === tx.id);
@@ -97,7 +99,34 @@ export const useTransactionManager = ({
                         }
                     }
                 }
-                // Tron Logic could be added here similar to EVM but usually requires specific API calls
+                // Tron Logic
+                else if (activeChain.chainType === 'TRON' && tx.hash) {
+                   const host = activeChain.defaultRpcUrl;
+                   const info = await TronService.getTransactionInfo(host, tx.hash);
+                   
+                   // If info is empty object {}, it's still pending/not found in solidity node
+                   if (info && info.id) {
+                      const index = updatedList.findIndex(t => t.id === tx.id);
+                      if (index !== -1) {
+                         // Check receipt status
+                         // Usually info.receipt.result == 'SUCCESS' or it might be 'OUT_OF_ENERGY', 'REVERT' etc.
+                         let isSuccess = true;
+                         let errorMsg = undefined;
+
+                         if (info.receipt && info.receipt.result && info.receipt.result !== 'SUCCESS') {
+                            isSuccess = false;
+                            errorMsg = info.receipt.result;
+                         }
+
+                         updatedList[index] = {
+                            ...updatedList[index],
+                            status: isSuccess ? 'confirmed' : 'failed',
+                            error: errorMsg
+                         };
+                         needsUpdate = true;
+                      }
+                   }
+                }
             } catch (e) {
                 console.warn(`Error checking receipt for ${tx.hash}`, e);
             }
@@ -390,7 +419,7 @@ export const useTransactionManager = ({
             value, 
             data, 
             gasLimit: txGasLimit, 
-            gasPrice: txGasPrice,
+            gasPrice: txGasPrice, 
             nonce: nonce 
         };
         const txId = Date.now().toString();

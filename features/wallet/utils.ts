@@ -1,5 +1,6 @@
 
-import { ChainConfig } from "./types";
+
+import { ChainConfig, ExplorerConfig } from "./types";
 
 // Polyfill global for crypto libs
 if (typeof window !== 'undefined' && !(window as any).global) {
@@ -12,14 +13,27 @@ export const normalizeHex = (hex: string) => {
   return '0x' + hex;
 };
 
+export const getActiveExplorer = (chain: ChainConfig): ExplorerConfig | undefined => {
+  if (!chain.explorers || chain.explorers.length === 0) return undefined;
+  
+  if (chain.defaultExplorerKey) {
+    const found = chain.explorers.find(e => e.key === chain.defaultExplorerKey);
+    if (found) return found;
+  }
+  
+  return chain.explorers[0];
+};
+
 export const getExplorerLink = (chain: ChainConfig, hash: string) => {
-  if (!chain.explorer || !chain.explorer.txPath) return "#";
-  return chain.explorer.txPath.replace("{txid}", hash);
+  const explorer = getActiveExplorer(chain);
+  if (!explorer || !explorer.txPath) return "#";
+  return explorer.txPath.replace("{txid}", hash);
 };
 
 export const getExplorerAddressLink = (chain: ChainConfig, address: string) => {
-  if (!chain.explorer || !chain.explorer.addressPath) return "#";
-  return chain.explorer.addressPath.replace("{address}", address);
+  const explorer = getActiveExplorer(chain);
+  if (!explorer || !explorer.addressPath) return "#";
+  return explorer.addressPath.replace("{address}", address);
 };
 
 export const handleTxError = (e: any) => {

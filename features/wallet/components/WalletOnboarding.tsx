@@ -17,15 +17,15 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
   
   return (
     <div className={`
-      min-h-screen flex flex-col items-center justify-center p-6 bg-[#0f172a] text-white relative overflow-hidden
+      min-h-screen flex flex-col items-center justify-center p-6 bg-[#020617] text-white relative overflow-hidden
       transition-all duration-1000 ease-in-out
       ${isExiting ? 'opacity-0 scale-105 filter blur-sm bg-black' : 'opacity-100 scale-100'}
     `}>
       
       {/* --- Desktop Only: Dynamic Background --- */}
       <div className="hidden md:block absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 rounded-full blur-[120px] animate-float"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 rounded-full blur-[120px] animate-float" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[120px] animate-float"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] animate-float" style={{ animationDelay: '2s' }}></div>
       </div>
 
       <div className="max-w-md w-full relative z-10 animate-tech-in">
@@ -46,7 +46,7 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
           {/* Mobile High-Contrast Border */}
           <div className="md:hidden absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-3xl opacity-100"></div>
           
-          <div className="relative bg-[#0f172a] md:bg-slate-800/50 md:backdrop-blur-xl border border-slate-700 md:border-white/10 rounded-3xl p-8 shadow-2xl">
+          <div className="relative bg-[#0b1121] md:bg-slate-900/60 md:backdrop-blur-xl border border-slate-800 md:border-white/10 rounded-3xl p-8 shadow-2xl">
              <div className="flex items-center justify-between mb-6">
                <div className="flex items-center space-x-2">
                  <Lock className="w-4 h-4 text-indigo-400" />
@@ -60,7 +60,7 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
              <div className="space-y-6">
                <div>
                  <textarea
-                   className="w-full p-4 bg-slate-900 border-2 border-slate-700 focus:border-indigo-500 rounded-xl font-mono text-base text-white placeholder:text-slate-500 focus:ring-0 outline-none transition-colors resize-none shadow-inner"
+                   className="w-full p-4 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl font-mono text-base text-white placeholder:text-slate-600 focus:ring-0 outline-none transition-colors resize-none shadow-inner"
                    placeholder="Mnemonic Phrase or Private Key"
                    rows={3}
                    value={input}
@@ -78,7 +78,7 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
                
                <Button 
                   onClick={onImport} 
-                  className="w-full py-4 text-lg font-bold bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg md:shadow-indigo-900/40 rounded-xl transition-all" 
+                  className="w-full py-4 text-lg font-bold bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg md:shadow-indigo-900/40 rounded-xl transition-all border-t border-white/10" 
                   disabled={!input || isExiting}
                   isLoading={isExiting}
                   icon={!isExiting ? <ArrowRight className="w-5 h-5" /> : undefined}
@@ -88,7 +88,7 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
              </div>
 
              {error && (
-              <div className="mt-6 p-4 bg-red-900/30 border border-red-500/50 rounded-xl flex items-start animate-shake">
+              <div className="mt-6 p-4 bg-red-950/50 border border-red-500/30 rounded-xl flex items-start animate-shake">
                 <Hexagon className="w-5 h-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-200 font-medium">{error}</p>
               </div>
@@ -98,12 +98,12 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
 
         {/* Security Footnote */}
         <div className="mt-8 text-center space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-3 text-xs text-slate-400">
-             <div className="flex items-center px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-3 text-xs text-slate-500">
+             <div className="flex items-center px-3 py-1 bg-slate-900/80 rounded-full border border-slate-800">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                 <span>Client-Side Encryption</span>
              </div>
-             <div className="flex items-center px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+             <div className="flex items-center px-3 py-1 bg-slate-900/80 rounded-full border border-slate-800">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                 <span>Zero Telemetry</span>
              </div>

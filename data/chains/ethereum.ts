@@ -1,4 +1,5 @@
 
+
 import { ChainData } from '../../features/wallet/types';
 
 export const ethereum: ChainData = {
@@ -12,13 +13,22 @@ export const ethereum: ChainData = {
     'https://1rpc.io/eth'
   ],
   currencySymbol: 'ETH',
-  explorer: {
-    name: 'Etherscan',
-    key: 'etherscan',
-    url: 'https://etherscan.io',
-    txPath: 'https://etherscan.io/tx/{txid}',
-    addressPath: 'https://etherscan.io/address/{address}'
-  },
+  explorers: [
+    {
+      name: 'Etherscan',
+      key: 'etherscan',
+      url: 'https://etherscan.io',
+      txPath: 'https://etherscan.io/tx/{txid}',
+      addressPath: 'https://etherscan.io/address/{address}'
+    },
+    {
+      name: 'OKLink',
+      key: 'oklink',
+      url: 'https://www.oklink.com/ethereum',
+      txPath: 'https://www.oklink.com/ethereum/tx/{txid}',
+      addressPath: 'https://www.oklink.com/zh-hans/ethereum/address/{address}'
+    }
+  ],
   chainType: 'EVM',
   tokens: [
     { symbol: 'USDT', name: 'Tether USD', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 },

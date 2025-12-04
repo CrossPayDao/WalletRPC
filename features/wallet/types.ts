@@ -26,7 +26,8 @@ export interface NetworkDefinition {
   defaultRpcUrl: string;
   publicRpcUrls: string[];
   currencySymbol: string;
-  explorer: ExplorerConfig;
+  explorers: ExplorerConfig[]; // Changed from single explorer object to array
+  defaultExplorerKey?: string; // User's selected explorer key
   isTestnet?: boolean;
   chainType?: 'EVM' | 'TRON';
 }
