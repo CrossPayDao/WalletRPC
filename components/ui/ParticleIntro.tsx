@@ -2,6 +2,11 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
+// Ensure Three.js is available
+if (typeof window !== 'undefined' && !(window as any).THREE) {
+  (window as any).THREE = THREE;
+}
+
 interface ParticleIntroProps {
   onComplete?: () => void;
   fadeOut?: boolean;
@@ -10,133 +15,196 @@ interface ParticleIntroProps {
 export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOut = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
+  const speedRef = useRef<number>(0.2); // Initial speed
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // --- Setup Scene ---
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.002); // Fog to hide stars spawn/despawn
-
-    const camera = new THREE.PerspectiveCamera(60, width / height, 1, 1000);
-    camera.position.z = 1;
-    camera.rotation.x = 0; // Look straight ahead
-
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    
-    // Append canvas
-    const container = containerRef.current;
-    container.appendChild(renderer.domElement);
-
-    // --- Create Stars ---
-    const starCount = 6000;
-    const starGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(starCount * 3);
-    
-    // Fill initial positions
-    for(let i = 0; i < starCount; i++) {
-        // x, y random spread
-        positions[i * 3] = (Math.random() - 0.5) * 800;
-        positions[i * 3 + 1] = (Math.random() - 0.5) * 800;
-        // z random spread from "far away" (-600) to "behind camera" (200)
-        positions[i * 3 + 2] = (Math.random() - 0.5) * 800; 
+    // Check if THREE is available
+    if (typeof THREE === 'undefined') {
+      console.error('Three.js is not loaded');
+      return;
     }
 
-    const posAttribute = new THREE.BufferAttribute(positions, 3);
-    posAttribute.setUsage(THREE.DynamicDrawUsage); // Hint for frequent updates
-    starGeo.setAttribute('position', posAttribute);
+    // Setup
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.001);
 
+    // Calculate aspect ratio
+    const aspect = window.innerWidth / window.innerHeight;
+    const camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 3000);
+    camera.position.set(0, 0, 0);
+    camera.lookAt(0, 0, 1);  // Look forward along Z axis
+    
+
+    const renderer = new THREE.WebGLRenderer({ 
+      alpha: false,
+      antialias: true,
+      powerPreference: "high-performance"
+    });
+    // Set renderer size to match window
+    const setRendererSize = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(width, height);
+    };
+    setRendererSize();
+    renderer.setClearColor(0x000000, 1);  // Black background
+    
+    // Ensure canvas is positioned correctly and visible
+    const canvas = renderer.domElement;
+    Object.assign(canvas.style, {
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      width: '100%',
+      height: '100%',
+      zIndex: '1',
+      pointerEvents: 'none',
+      display: 'block',
+      visibility: 'visible',
+      opacity: '1',
+      backgroundColor: '#000000',
+      objectFit: 'cover'  // Ensure canvas covers the container
+    });
+    
+    containerRef.current.appendChild(canvas);
+    
+    
+
+    // Stars - Create particles moving towards camera (along Z axis)
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 6000;
+    const positions = new Float32Array(starCount * 3);
+
+    // Initialize particles in front of camera (positive Z)
+    // Create warp speed tunnel effect
+    for(let i=0; i<starCount; i++) {
+      positions[i*3] = (Math.random() - 0.5) * 2000;     // X - wider spread
+      positions[i*3+1] = (Math.random() - 0.5) * 2000;   // Y - wider spread
+      positions[i*3+2] = Math.random() * 2000;            // Z - distributed along tunnel
+    }
+
+    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    
+    // Create a circular sprite for stars - warp speed effect
     const starMaterial = new THREE.PointsMaterial({
-      color: 0xeeeeee,
-      size: 0.7,
+      color: 0xffffff,  // White stars
+      size: 2,
       transparent: true,
-      opacity: 0.8
+      opacity: 0.9,
+      sizeAttenuation: true,  // Enable size attenuation for depth effect
+      blending: THREE.AdditiveBlending,  // Additive blending for glow effect
+      depthWrite: false
     });
 
     const stars = new THREE.Points(starGeo, starMaterial);
     scene.add(stars);
+    
 
-    // --- Animation Loop ---
-    let speed = 0.2; // Initial speed
-    let acceleration = 0.05;
-
+    // Animation Loop
+    let frameCount = 0;
     const animate = () => {
-      // Warp acceleration logic
-      if (speed < 12) {
-          speed += acceleration;
-      }
-
+      frameCount++;
+      
+      // Warp speed logic
       const positions = starGeo.attributes.position.array as Float32Array;
       
-      for(let i = 0; i < starCount; i++) {
-        // Move star towards camera (+Z)
-        positions[i * 3 + 2] += speed;
+      // Increase speed over time
+      if (speedRef.current < 4) speedRef.current *= 1.01;
 
-        // Reset if it passes the camera or goes too far
-        if (positions[i * 3 + 2] > 200) {
-           positions[i * 3 + 2] = -600; // Reset to far distance
-           // Re-randomize X/Y to prevent "tunnels"
-           positions[i * 3] = (Math.random() - 0.5) * 800;
-           positions[i * 3 + 1] = (Math.random() - 0.5) * 800;
+      for(let i=0; i<starCount; i++) {
+        // Move stars towards camera (along Z axis, negative direction)
+        positions[i*3 + 2] -= speedRef.current;
+        
+        // Reset if passed camera (z < 0)
+        if (positions[i*3 + 2] < 0) {
+           positions[i*3 + 2] = 2000;
+           // Randomize X and Y when resetting for tunnel effect
+           positions[i*3] = (Math.random() - 0.5) * 2000;
+           positions[i*3 + 1] = (Math.random() - 0.5) * 2000;
         }
       }
-
-      starGeo.attributes.position.needsUpdate = true;
       
-      // Slight rotation for visual interest
-      stars.rotation.z += 0.0005;
+      starGeo.attributes.position.needsUpdate = true;
 
       renderer.render(scene, camera);
+      
+      // Remove debug logs for production
+      
       requestRef.current = requestAnimationFrame(animate);
     };
 
-    animate();
+    // Start animation
+    requestRef.current = requestAnimationFrame(animate);
 
-    // --- Resize Handler ---
+    // Resize Handler - properly update camera and renderer
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      // Update camera aspect ratio
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      
+      // Update renderer size
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(width, height);
+      
+      // Update canvas style to match
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
     };
     window.addEventListener('resize', handleResize);
 
-    // --- Cleanup ---
     return () => {
       window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      
-      // Clean up Three.js resources
-      if (container && renderer.domElement) {
-         try {
-           container.removeChild(renderer.domElement);
-         } catch (e) {
-           // Ignore if already removed
-         }
+      if (containerRef.current && renderer.domElement) {
+        containerRef.current.removeChild(renderer.domElement);
       }
-      
+      // Cleanup Three resources
       starGeo.dispose();
       starMaterial.dispose();
       renderer.dispose();
-      renderer.forceContextLoss();
-      scene.clear();
     };
   }, []);
 
-  return (
+    return (
     <div 
         className={`
-            fixed inset-0 bg-black z-50 flex items-center justify-center overflow-hidden
+            fixed inset-0 z-50 flex items-center justify-center overflow-hidden
             animate-in fade-in duration-1000
             transition-all duration-1000 ease-in-out
             ${fadeOut ? 'opacity-0 blur-lg scale-110' : 'opacity-100 scale-100'}
         `}
+        style={{ 
+          backgroundColor: 'transparent', 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          margin: 0,
+          padding: 0
+        }}
     >
-      <div ref={containerRef} className="absolute inset-0" />
+      <div 
+        ref={containerRef} 
+        className="absolute inset-0" 
+        style={{ 
+          zIndex: 1, 
+          pointerEvents: 'none',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          margin: 0,
+          padding: 0
+        }} 
+      />
       
       {/* Content Container */}
       <div className="relative z-10 text-center max-w-4xl px-8 animate-in fade-in zoom-in duration-1000 delay-500 fill-mode-forwards flex flex-col items-center">
