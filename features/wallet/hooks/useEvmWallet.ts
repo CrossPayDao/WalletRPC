@@ -38,7 +38,7 @@ export const useEvmWallet = () => {
   const state = useWalletState(chains[0].id);
   const { 
     wallet, activeAccountType, activeSafeAddress, activeChainId, 
-    view, setView, setError, setNotification, setIsLoading, tronWalletAddress 
+    view, setView, setError, setNotification, setIsLoading, tronWalletAddress, tronPrivateKey
   } = state;
 
   // 计算属性
@@ -76,6 +76,7 @@ export const useEvmWallet = () => {
   
   const txMgr = useTransactionManager({
     wallet,
+    tronPrivateKey, // Pass dedicated tron key
     activeAddress,
     activeChain,
     activeChainTokens,

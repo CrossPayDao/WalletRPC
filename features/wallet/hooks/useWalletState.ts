@@ -20,6 +20,9 @@ export const useWalletState = (initialChainId: number) => {
   /** 派生的 Tron 地址 */
   const [tronWalletAddress, setTronWalletAddress] = useState<string | null>(null);
 
+  /** 独立的 Tron 私钥 (因为助记词派生路径不同) */
+  const [tronPrivateKey, setTronPrivateKey] = useState<string | null>(null);
+
   /** 当前账户模式: 'EOA' (个人) 或 'SAFE' (多签) */
   const [activeAccountType, setActiveAccountType] = useState<'EOA' | 'SAFE'>('EOA');
   
@@ -68,24 +71,37 @@ export const useWalletState = (initialChainId: number) => {
     try {
       const input = privateKeyOrPhrase.trim();
       let newWallet: ethers.Wallet | ethers.HDNodeWallet;
+      let newTronPrivateKey: string;
       let derivedTronAddr: string | null = null;
 
       if (input.includes(' ')) {
+        // 1. EVM Wallet (Default Path: m/44'/60'/0'/0/0)
         newWallet = ethers.Wallet.fromPhrase(input);
+        
+        // 2. Tron Wallet (Tron Path: m/44'/195'/0'/0/0)
+        // 必须使用特定的派生路径，否则地址会与 TronLink 等不一致
+        const mnemonic = ethers.Mnemonic.fromPhrase(input);
+        const tronNode = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/195'/0'/0/0");
+        newTronPrivateKey = tronNode.privateKey;
+
       } else {
+        // 私钥导入：两链使用相同私钥
         const pk = input.startsWith('0x') ? input : '0x' + input;
         newWallet = new ethers.Wallet(pk);
+        newTronPrivateKey = pk;
       }
       
       try {
-         const pk = newWallet.privateKey.startsWith('0x') ? newWallet.privateKey : '0x' + newWallet.privateKey;
+         const pk = newTronPrivateKey.startsWith('0x') ? newTronPrivateKey : '0x' + newTronPrivateKey;
          derivedTronAddr = TronService.addressFromPrivateKey(pk);
       } catch (e) {
          console.warn("无法派生 Tron 地址", e);
       }
 
       setWallet(newWallet);
+      setTronPrivateKey(newTronPrivateKey);
       setTronWalletAddress(derivedTronAddr);
+      
       // 注意：这里不再直接 setView('intro_animation')
       // 而是返回 true，让 UI 层控制动画时机
       return true;
@@ -99,6 +115,7 @@ export const useWalletState = (initialChainId: number) => {
   return {
     wallet, setWallet,
     tronWalletAddress,
+    tronPrivateKey, // Export Tron Private Key
     activeAccountType, setActiveAccountType,
     activeSafeAddress, setActiveSafeAddress,
     activeChainId, setActiveChainId,

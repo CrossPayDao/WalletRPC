@@ -1,5 +1,4 @@
 
-
 import { useState, useRef, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { TronService } from '../../../services/tronService';
@@ -10,6 +9,7 @@ import { ERC20_ABI } from '../config';
 
 interface UseTransactionManagerProps {
   wallet: ethers.Wallet | ethers.HDNodeWallet | null;
+  tronPrivateKey: string | null; // Added dedicated Tron key
   activeAddress: string | null | undefined;
   activeChain: ChainConfig;
   activeChainTokens: TokenConfig[];
@@ -44,6 +44,7 @@ export type ProcessResult = {
  */
 export const useTransactionManager = ({
   wallet,
+  tronPrivateKey,
   activeAddress,
   activeChain,
   activeChainTokens,
@@ -194,7 +195,15 @@ export const useTransactionManager = ({
         setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'submitted' } : t));
 
         let hash;
-        const pk = wallet.privateKey.startsWith('0x') ? wallet.privateKey : '0x' + wallet.privateKey;
+        
+        // Use dedicated Tron private key if available (from mnemonic derivation)
+        // Fallback to wallet private key (from raw private key import)
+        let pk = tronPrivateKey;
+        if (!pk) {
+             pk = wallet.privateKey.startsWith('0x') ? wallet.privateKey : '0x' + wallet.privateKey;
+        } else {
+             pk = pk.startsWith('0x') ? pk : '0x' + pk;
+        }
 
         // Tron broadcast is usually fast, but confirmation takes time. 
         // We consider broadcast success as 'timeout' (pending) for the UI if it's not instant.

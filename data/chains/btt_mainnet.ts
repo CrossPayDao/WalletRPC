@@ -1,4 +1,3 @@
-
 import { ChainData } from '../../features/wallet/types';
 
 export const bttMainnet: ChainData = {
@@ -22,8 +21,8 @@ export const bttMainnet: ChainData = {
   ],
   chainType: 'EVM',
   tokens: [
-    { symbol: 'USDT', name: 'Tether USD', address: '0xdb28719f7f938507fe92955f7c73c82926956f6a', decimals: 6 },
-    { symbol: 'USDC', name: 'USD Coin', address: '0x935faa2fcec6ea4233032758537804258d2728b7', decimals: 6 },
-    { symbol: 'USDD', name: 'Decentralized USD', address: '0x17f235fd5974318e4e2a5e37919a209f7c37a6d1', decimals: 18 }
+    { symbol: 'USDT_b', name: 'CPcash Peg Binance USDT', address: '0xDe8EC37078F6937BE2063daa0851448657D71C21', decimals: 18 },
+    { symbol: 'USDT_e', name: 'CPcash Peg Ethereum USDT', address: '0x1B4b51597afA971F7211bdeEC5e00a0Fd9900B79', decimals: 18 },
+    { symbol: 'USDT_t', name: 'CPcash Peg Tron USDT', address: '0x0000000e2605a3eC27C914db851010938aAA6DEa', decimals: 18 }
   ]
 };

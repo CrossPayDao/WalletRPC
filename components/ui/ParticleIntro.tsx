@@ -10,71 +10,86 @@ interface ParticleIntroProps {
 export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOut = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
-  const speedRef = useRef<number>(0.2); // Initial speed
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Setup
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.001);
+    // --- Setup Scene ---
+    const width = window.innerWidth;
+    const height = window.innerHeight;
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.002); // Fog to hide stars spawn/despawn
+
+    const camera = new THREE.PerspectiveCamera(60, width / height, 1, 1000);
     camera.position.z = 1;
-    camera.rotation.x = Math.PI / 2;
+    camera.rotation.x = 0; // Look straight ahead
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    containerRef.current.appendChild(renderer.domElement);
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    // Append canvas
+    const container = containerRef.current;
+    container.appendChild(renderer.domElement);
 
-    // Stars
-    const starGeo = new THREE.BufferGeometry();
+    // --- Create Stars ---
     const starCount = 6000;
+    const starGeo = new THREE.BufferGeometry();
     const positions = new Float32Array(starCount * 3);
-    const velocities = [];
-
-    for(let i=0; i<starCount; i++) {
-      positions[i*3] = (Math.random() - 0.5) * 600;
-      positions[i*3+1] = (Math.random() - 0.5) * 600;
-      positions[i*3+2] = (Math.random() - 0.5) * 600;
-      velocities.push(0);
+    
+    // Fill initial positions
+    for(let i = 0; i < starCount; i++) {
+        // x, y random spread
+        positions[i * 3] = (Math.random() - 0.5) * 800;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 800;
+        // z random spread from "far away" (-600) to "behind camera" (200)
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 800; 
     }
 
-    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    
-    // Create a circular sprite for stars
-    // Better: use simple PointsMaterial
+    const posAttribute = new THREE.BufferAttribute(positions, 3);
+    posAttribute.setUsage(THREE.DynamicDrawUsage); // Hint for frequent updates
+    starGeo.setAttribute('position', posAttribute);
+
     const starMaterial = new THREE.PointsMaterial({
-      color: 0xaaaaaa,
+      color: 0xeeeeee,
       size: 0.7,
-      transparent: true
+      transparent: true,
+      opacity: 0.8
     });
 
     const stars = new THREE.Points(starGeo, starMaterial);
     scene.add(stars);
 
-    // Animation Loop
+    // --- Animation Loop ---
+    let speed = 0.2; // Initial speed
+    let acceleration = 0.05;
+
     const animate = () => {
-      // Warp speed logic
+      // Warp acceleration logic
+      if (speed < 12) {
+          speed += acceleration;
+      }
+
       const positions = starGeo.attributes.position.array as Float32Array;
       
-      // Increase speed over time
-      if (speedRef.current < 4) speedRef.current *= 1.01;
+      for(let i = 0; i < starCount; i++) {
+        // Move star towards camera (+Z)
+        positions[i * 3 + 2] += speed;
 
-      for(let i=0; i<starCount; i++) {
-        // Move stars towards camera (which is facing roughly Y/Z in this setup depending on rotation)
-        // Let's simplify: Move along Y axis in local space of rotation
-        positions[i*3 + 1] -= speedRef.current; // Move down Y
-        
-        // Reset if passed camera
-        if (positions[i*3 + 1] < -200) {
-           positions[i*3 + 1] = 200;
+        // Reset if it passes the camera or goes too far
+        if (positions[i * 3 + 2] > 200) {
+           positions[i * 3 + 2] = -600; // Reset to far distance
+           // Re-randomize X/Y to prevent "tunnels"
+           positions[i * 3] = (Math.random() - 0.5) * 800;
+           positions[i * 3 + 1] = (Math.random() - 0.5) * 800;
         }
       }
-      
+
       starGeo.attributes.position.needsUpdate = true;
-      stars.rotation.y += 0.002;
+      
+      // Slight rotation for visual interest
+      stars.rotation.z += 0.0005;
 
       renderer.render(scene, camera);
       requestRef.current = requestAnimationFrame(animate);
@@ -82,7 +97,7 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOu
 
     animate();
 
-    // Resize Handler
+    // --- Resize Handler ---
     const handleResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
@@ -90,16 +105,25 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOu
     };
     window.addEventListener('resize', handleResize);
 
+    // --- Cleanup ---
     return () => {
       window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
+      
+      // Clean up Three.js resources
+      if (container && renderer.domElement) {
+         try {
+           container.removeChild(renderer.domElement);
+         } catch (e) {
+           // Ignore if already removed
+         }
       }
-      // Cleanup Three resources
+      
       starGeo.dispose();
       starMaterial.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
+      scene.clear();
     };
   }, []);
 
