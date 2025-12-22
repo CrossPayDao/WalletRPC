@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { ethers } from 'ethers';
 import { TronService } from '../../../services/tronService';
+import { FeeService } from '../../../services/feeService';
 import { handleTxError, normalizeHex } from '../utils';
 import { TransactionRecord, ChainConfig, TokenConfig } from '../types';
 import { SendFormData } from '../components/SendForm';
@@ -30,12 +31,6 @@ export type ProcessResult = {
     error?: string;
 };
 
-const localFeeCache = {
-  data: null as ethers.FeeData | null,
-  timestamp: 0,
-  chainId: 0
-};
-
 export const useTransactionManager = ({
   wallet,
   tronPrivateKey,
@@ -54,19 +49,6 @@ export const useTransactionManager = ({
 
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const localNonceRef = useRef<number | null>(null);
-  const noncePromiseRef = useRef<Promise<number> | null>(null);
-
-  const getFeeDataOptimized = async (p: ethers.JsonRpcProvider) => {
-    const now = Date.now();
-    if (localFeeCache.data && (now - localFeeCache.timestamp < 15000) && localFeeCache.chainId === activeChain.id) {
-      return localFeeCache.data;
-    }
-    const data = await p.getFeeData();
-    localFeeCache.data = data;
-    localFeeCache.timestamp = now;
-    localFeeCache.chainId = activeChain.id;
-    return data;
-  };
 
   useEffect(() => {
     if (transactions.length === 0) return;
@@ -141,39 +123,36 @@ export const useTransactionManager = ({
             }
         }
 
-        // 2. Fees
-        const feeData = await getFeeDataOptimized(provider);
-        if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-            txRequest.maxFeePerGas = (feeData.maxFeePerGas * 150n) / 100n;
-            txRequest.maxPriorityFeePerGas = (feeData.maxPriorityFeePerGas * 120n) / 100n;
-        } else if (feeData.gasPrice) {
-            txRequest.gasPrice = (feeData.gasPrice * 130n) / 100n;
-        }
-
-        // 3. 硬编码 Gas Limit 优先逻辑
-        if (!txRequest.gasLimit) {
-            const isERC20 = txRequest.data && (txRequest.data as string).startsWith('0xa9059cbb'); // transfer(...)
-            const isSafeExec = txRequest.data && (txRequest.data as string).startsWith('0x6a76128f'); // execTransaction(...)
+        // 2. Fees & Overrides (Shared logic)
+        const feeData = await FeeService.getOptimizedFeeData(provider, activeChain.id);
+        
+        // 3. Estimate/Apply Gas Limit
+        let gasLimit = txRequest.gasLimit;
+        if (!gasLimit) {
+            const isERC20 = txRequest.data && (txRequest.data as string).startsWith('0xa9059cbb');
+            const isSafeExec = txRequest.data && (txRequest.data as string).startsWith('0x6a76128f');
 
             if (isSafeExec && activeChain.gasLimits?.safeExec) {
-                txRequest.gasLimit = BigInt(activeChain.gasLimits.safeExec);
+                gasLimit = BigInt(activeChain.gasLimits.safeExec);
             } else if (isERC20 && activeChain.gasLimits?.erc20Transfer) {
-                txRequest.gasLimit = BigInt(activeChain.gasLimits.erc20Transfer);
+                gasLimit = BigInt(activeChain.gasLimits.erc20Transfer);
             } else if (!txRequest.data || txRequest.data === '0x') {
-                txRequest.gasLimit = BigInt(activeChain.gasLimits?.nativeTransfer || 100000);
+                gasLimit = BigInt(activeChain.gasLimits?.nativeTransfer || 100000);
             } else {
-                // 兜底估算
                 try {
                     const estimated = await provider.estimateGas(txRequest);
-                    txRequest.gasLimit = (estimated * 300n) / 100n; // 默认 3 倍缓冲
+                    gasLimit = (estimated * 150n) / 100n;
                 } catch {
-                    txRequest.gasLimit = BigInt(800000);
+                    gasLimit = BigInt(800000);
                 }
             }
         }
 
+        const overrides = FeeService.buildOverrides(feeData, gasLimit);
+        const finalTx = { ...txRequest, ...overrides };
+
         setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'submitted' } : t));
-        const txResponse = await connectedWallet.sendTransaction(txRequest);
+        const txResponse = await connectedWallet.sendTransaction(finalTx);
         setTransactions(prev => prev.map(t => t.id === id ? { ...t, hash: txResponse.hash } : t));
         
         const result = await Promise.race([
