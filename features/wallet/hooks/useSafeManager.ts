@@ -31,6 +31,10 @@ export const useSafeManager = ({
 
   /**
    * 【核心逻辑：Safe 交易提议 (Proposing)】
+   * 
+   * 优化点：移除了冗余的 getCode 检查。
+   * 理由：在进入此逻辑前，fetchData 已经通过 eth_call 获取了 owners 和 threshold，
+   * 意味着合约必然存在。在同一条链上，合约属性是静态的，无需重复验证。
    */
   const handleSafeProposal = async (to: string, value: bigint, data: string, summary?: string): Promise<boolean> => {
       if (!wallet || !activeSafeAddress || !provider) return false;
@@ -41,12 +45,8 @@ export const useSafeManager = ({
       try {
         const safeContract = new ethers.Contract(activeSafeAddress, SAFE_ABI, provider);
         
-        // 增加对合约可用性的预检
-        const code = await provider.getCode(activeSafeAddress);
-        if (code === '0x' || code === '0x0') {
-            throw new Error("Target address is not a contract. Synchronization may be delayed.");
-        }
-
+        // 之前此处存在冗余的 provider.getCode 调用，现已移除以节省 RPC 额度。
+        
         const [currentNonce, owners, threshold] = await Promise.all([
            safeContract.nonce().then(n => Number(n)),
            safeContract.getOwners(),
@@ -177,7 +177,6 @@ export const useSafeManager = ({
               }
             } catch (e) {
               // 最后的保底方案：忽略 ABI，直接按偏移量暴力截取 20 字节地址
-              // 在标准的 EVM 事件 data 布局中，非索引参数地址通常位于 32 字节字块的后 20 位
               if (log.data && log.data.length >= 66) {
                   proxyAddress = ethers.getAddress(ethers.dataSlice(log.data, 12, 32));
                   break;
