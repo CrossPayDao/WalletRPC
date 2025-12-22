@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { TransactionRecord, ChainConfig, TokenConfig } from '../types';
 import { FeeService } from '../../../services/feeService';
-import { handleTxError } from '../utils';
+import { handleTxError, normalizeHex } from '../utils';
 import { TronService } from '../../../services/tronService';
 
 export interface ProcessResult {
@@ -41,30 +41,47 @@ export const useTransactionManager = ({
   }, [wallet, provider, activeChain]);
 
   useEffect(() => {
+    // 逻辑：如果是 TRON 网络，跳过基于 EVM Provider 的回执轮询。
     if (activeChain.chainType === 'TRON' || !provider || transactions.length === 0) return;
     
     const interval = setInterval(async () => {
-      const pending = transactions.filter(t => t.status === 'submitted');
+      // 核心修复 1：使用显式的数值转换进行链 ID 过滤，防止 string/number 类型不匹配。
+      const currentId = Number(activeChainId);
+      const pending = transactions.filter(t => 
+        t.status === 'submitted' && 
+        Number(t.chainId) === currentId &&
+        t.hash
+      );
+      
       if (pending.length === 0) return;
 
       for (const tx of pending) {
         if (!tx.hash) continue;
+        
         try {
-          const receipt = await provider.getTransactionReceipt(tx.hash);
+          // 核心修复 2：使用 normalizeHex 确保哈希严格符合 0x + 64位十六进制规范。
+          const normalizedHash = normalizeHex(tx.hash);
+          
+          const receipt = await provider.getTransactionReceipt(normalizedHash);
           if (receipt) {
             setTransactions(prev => prev.map(t => 
               t.id === tx.id ? { ...t, status: receipt.status === 1 ? 'confirmed' : 'failed' } : t
             ));
-            if (receipt.status === 1) fetchData();
+            // 延迟刷新数据，确保索引节点已同步
+            if (receipt.status === 1) setTimeout(fetchData, 1000);
           }
         } catch (e) {
-          console.error("Receipt check failed", e);
+          // 针对特定的 RPC 错误进行静默处理，避免干扰用户控制台
+          const errStr = String(e);
+          if (!errStr.includes("json: cannot unmarshal")) {
+            console.error("Receipt check failed", e);
+          }
         }
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [provider, transactions, activeChain, fetchData]);
+  }, [provider, transactions, activeChain, activeChainId, fetchData]);
 
   const handleSendSubmit = async (data: any): Promise<ProcessResult> => {
     try {
@@ -74,10 +91,12 @@ export const useTransactionManager = ({
         throw new Error("Wallet/Provider not ready");
       }
 
+      const displaySymbol = data.asset === 'NATIVE' ? activeChain.currencySymbol : data.asset;
+
       if (data.activeAccountType === 'SAFE') {
         if (!handleSafeProposal) throw new Error("Safe manager not initialized");
         const amountWei = ethers.parseUnits(data.amount || "0", data.asset === 'NATIVE' ? 18 : 6); 
-        const success = await handleSafeProposal(data.recipient, amountWei, data.customData || "0x", `Send ${data.amount} ${data.asset}`);
+        const success = await handleSafeProposal(data.recipient, amountWei, data.customData || "0x", `Send ${data.amount} ${displaySymbol}`);
         return { success };
       }
 
@@ -85,7 +104,6 @@ export const useTransactionManager = ({
       if (isTron) {
         if (!tronPrivateKey) throw new Error("TRON private key missing");
         
-        // 查找代币配置以获取精度
         const token = activeChain.tokens.find((t: TokenConfig) => t.symbol === data.asset);
         const decimals = data.asset === 'NATIVE' ? 6 : (token?.decimals || 6);
         const amountSun = ethers.parseUnits(data.amount || "0", decimals);
@@ -102,14 +120,13 @@ export const useTransactionManager = ({
           const id = Date.now().toString();
           setTransactions(prev => [{
             id,
-            chainId: activeChainId,
+            chainId: Number(activeChainId),
             hash: result.txid,
             status: 'submitted',
             timestamp: Date.now(),
-            summary: `Send ${data.amount} ${data.asset === 'NATIVE' ? activeChain.currencySymbol : data.asset}`
+            summary: `Send ${data.amount} ${displaySymbol}`
           }, ...prev]);
           
-          // TRON 广播后通常 3 秒左右生效，提前刷新
           setTimeout(fetchData, 3000);
           return { success: true, hash: result.txid };
         } else {
@@ -144,11 +161,11 @@ export const useTransactionManager = ({
       const id = Date.now().toString();
       setTransactions(prev => [{
         id,
-        chainId: activeChainId,
+        chainId: Number(activeChainId),
         hash: tx.hash,
         status: 'submitted',
         timestamp: Date.now(),
-        summary: `Send ${data.amount} ${activeChain.currencySymbol}`
+        summary: `Send ${data.amount} ${displaySymbol}`
       }, ...prev]);
 
       return { success: true, hash: tx.hash };
