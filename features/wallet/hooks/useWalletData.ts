@@ -110,7 +110,7 @@ export const useWalletData = ({
          if (activeAccountType === 'SAFE') {
             // 安全检查 1: 确保地址是有效的合约地址
             const code = await provider.getCode(activeAddress);
-            if (code === '0x') {
+            if (code === '0x' || code === '0x0') {
                // 如果当前网络没有这个 Safe，静默失败，不要报错
                // 这样 useEvmWallet 的副作用可以安全地切换回 EOA 而不弹出错误
                setSafeDetails(null);
@@ -136,8 +136,8 @@ export const useWalletData = ({
       // 如果是 SAFE 模式下的错误，提供友好的提示
       if (activeAccountType === 'SAFE') {
          setSafeDetails(null);
-         // Suppress INVALID_CONTRACT error if it leaked through
-         if (e.message === 'INVALID_CONTRACT') return;
+         // Fixed: Sync error string check to 'NOT_A_CONTRACT'
+         if (e.message === 'NOT_A_CONTRACT') return;
          
          if (e.code === 'BAD_DATA' || e.message?.includes('call revert')) {
              setError("无法读取 Safe 合约数据，请确保地址正确且部署在当前网络。");

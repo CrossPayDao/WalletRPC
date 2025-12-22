@@ -1,5 +1,4 @@
 
-
 export interface TokenDefinition {
   symbol: string;
   name: string;
@@ -16,8 +15,14 @@ export interface ExplorerConfig {
   name: string;
   key: string;
   url: string;
-  txPath: string;      // Pattern: https://.../tx/{txid}
-  addressPath: string; // Pattern: https://.../address/{address}
+  txPath: string;
+  addressPath: string;
+}
+
+export interface SafeContracts {
+  proxyFactory: string;
+  singleton: string;
+  fallbackHandler: string;
 }
 
 export interface NetworkDefinition {
@@ -26,16 +31,20 @@ export interface NetworkDefinition {
   defaultRpcUrl: string;
   publicRpcUrls: string[];
   currencySymbol: string;
-  explorers: ExplorerConfig[]; // Changed from single explorer object to array
-  defaultExplorerKey?: string; // User's selected explorer key
+  explorers: ExplorerConfig[];
+  defaultExplorerKey?: string;
   isTestnet?: boolean;
   chainType?: 'EVM' | 'TRON';
+  gasLimits?: {
+    nativeTransfer: number;
+    erc20Transfer: number;
+    safeExec: number;
+    safeSetup: number;
+  };
+  // 新增：按链定义的 Safe 合约配置
+  safeContracts?: SafeContracts;
 }
 
-/**
- * Represents a single file in the data/chains directory.
- * Contains network configuration and default token list.
- */
 export interface ChainData extends NetworkDefinition {
   tokens: TokenDefinition[];
 }
@@ -53,7 +62,7 @@ export interface TrackedSafe {
 
 export interface TransactionRecord {
   id: string;
-  chainId: number; // Added to track which network this tx belongs to
+  chainId: number;
   hash?: string;
   status: 'queued' | 'submitted' | 'confirmed' | 'failed';
   timestamp: number;
@@ -62,21 +71,15 @@ export interface TransactionRecord {
 }
 
 export interface SafePendingTx {
-  id: string; // timestamp
+  id: string;
   to: string;
   value: string;
   data: string;
   nonce: number;
   safeTxHash: string;
-  signatures: Record<string, string>; // owner -> signature
+  signatures: Record<string, string>;
   summary: string;
   executor?: string;
-}
-
-export interface SafeContracts {
-  proxyFactory: string;
-  singleton: string;
-  fallbackHandler: string;
 }
 
 export interface SafeDetails {

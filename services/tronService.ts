@@ -4,10 +4,39 @@ import bs58 from 'bs58';
 
 export const TronService = {
   // Address Utilities
+  
+  /**
+   * Validates a Tron Base58 address (starts with T, length 34, valid checksum)
+   */
+  isValidBase58Address: (address: string): boolean => {
+    try {
+      if (typeof address !== 'string' || address.length !== 34 || !address.startsWith('T')) {
+        return false;
+      }
+
+      const bytes = bs58.decode(address);
+      if (bytes.length !== 25) return false;
+      if (bytes[0] !== 0x41) return false;
+
+      const payload = bytes.slice(0, 21);
+      const checksum = bytes.slice(21);
+      
+      const hash0 = ethers.getBytes(ethers.sha256(payload));
+      const hash1 = ethers.getBytes(ethers.sha256(hash0));
+      const expectedChecksum = hash1.slice(0, 4);
+
+      return checksum[0] === expectedChecksum[0] &&
+             checksum[1] === expectedChecksum[1] &&
+             checksum[2] === expectedChecksum[2] &&
+             checksum[3] === expectedChecksum[3];
+    } catch (e) {
+      return false;
+    }
+  },
+
   toHexAddress: (base58Addr: string): string => {
     if (!base58Addr) return "";
     if (base58Addr.startsWith("0x")) {
-        // If it's a 20-byte ETH address (42 chars), convert to 21-byte Tron Hex (44 chars)
         if (base58Addr.length === 42) {
             return "0x41" + base58Addr.slice(2);
         }
@@ -15,21 +44,18 @@ export const TronService = {
     }
     try {
       const bytes = bs58.decode(base58Addr);
-      const hex = ethers.hexlify(bytes.slice(0, -4)); // Remove 4-byte checksum
-      return hex; // Returns 0x41...
+      const hex = ethers.hexlify(bytes.slice(0, -4)); 
+      return hex; 
     } catch (e) { return ""; }
   },
 
   fromHexAddress: (hexAddr: string): string => {
     if (!hexAddr.startsWith("0x")) hexAddr = "0x" + hexAddr;
-    if (hexAddr.length < 42) return ""; // Invalid length
-    // Ensure prefix is 41
+    if (hexAddr.length < 42) return ""; 
     if (hexAddr.substring(0, 4) !== "0x41") {
-       // Convert Eth address to Tron
        hexAddr = "0x41" + hexAddr.substring(2);
     }
     const bytes = ethers.getBytes(hexAddr);
-    // Use ethers for SHA256 (returns hex, convert to bytes)
     const hash0 = ethers.getBytes(ethers.sha256(bytes));
     const hash1 = ethers.getBytes(ethers.sha256(hash0));
     const checksum = hash1.slice(0, 4);
@@ -41,8 +67,6 @@ export const TronService = {
 
   addressFromPrivateKey: (privateKey: string): string => {
     const w = new ethers.Wallet(privateKey);
-    // w.address is 0x... (20 bytes)
-    // Tron address is 41 + address (20 bytes)
     const hexAddr = "0x41" + w.address.slice(2);
     return TronService.fromHexAddress(hexAddr);
   },
@@ -60,15 +84,13 @@ export const TronService = {
   getBalance: async (host: string, addressBase58: string): Promise<string> => {
     const hex = TronService.toHexAddress(addressBase58);
     const res = await TronService.rpcCall(host, '/wallet/getaccount', { address: hex });
-    return (res.balance || 0).toString(); // in SUN
+    return (res.balance || 0).toString(); 
   },
 
   getTrc20Balance: async (host: string, addressBase58: string, contractBase58: string): Promise<string> => {
     const ownerHex = TronService.toHexAddress(addressBase58);
     const contractHex = TronService.toHexAddress(contractBase58);
-    // ABI Encode balanceOf(address): 70a08231 + 32-byte padded address
-    // Address in ABI is 20 bytes (without 41 prefix) padded to 32 bytes
-    const addrParam = "0".repeat(24) + ownerHex.slice(4); // Remove 0x41 -> get 20 bytes -> pad
+    const addrParam = "0".repeat(24) + ownerHex.slice(4); 
     
     const res = await TronService.rpcCall(host, '/wallet/triggerconstantcontract', {
       owner_address: ownerHex,
@@ -93,7 +115,6 @@ export const TronService = {
     const fromHex = TronService.toHexAddress(fromBase58);
     const toHex = TronService.toHexAddress(toBase58);
 
-    // 1. Create Transaction
     const tx = await TronService.rpcCall(host, '/wallet/createtransaction', {
       to_address: toHex,
       owner_address: fromHex,
@@ -102,10 +123,8 @@ export const TronService = {
 
     if (tx.Error) throw new Error(tx.Error);
 
-    // 2. Sign
     const signedTx = await TronService.signTransaction(privateKey, tx);
 
-    // 3. Broadcast
     const broadcast = await TronService.rpcCall(host, '/wallet/broadcasttransaction', signedTx);
     
     if (broadcast.result) return broadcast.txid || tx.txID;
@@ -118,10 +137,7 @@ export const TronService = {
     const contractHex = TronService.toHexAddress(contractBase58);
     const toHex = TronService.toHexAddress(toBase58);
 
-    // ABI Encode transfer(address,uint256)
-    // address: 20 bytes (eth style) padded
     const addrParam = "0".repeat(24) + toHex.slice(4); 
-    // amount: uint256 padded
     const amountHex = BigInt(amountRaw).toString(16);
     const amountParam = "0".repeat(64 - amountHex.length) + amountHex;
     const parameter = addrParam + amountParam;
@@ -131,7 +147,7 @@ export const TronService = {
       contract_address: contractHex,
       function_selector: 'transfer(address,uint256)',
       parameter: parameter,
-      fee_limit: 100000000 // 100 TRX limit default
+      fee_limit: 100000000 
     });
 
     if (!tx.result || !tx.result.result) throw new Error("Smart contract trigger failed");
@@ -146,14 +162,9 @@ export const TronService = {
   signTransaction: async (privateKey: string, transaction: any) => {
     const wallet = new ethers.Wallet(privateKey);
     const txID = transaction.txID;
-    // Sign the hash (txID) directly
-    // Ethers signingKey.sign returns {r, s, v}
     const signatureObj = wallet.signingKey.sign("0x" + txID);
+    const signature = signatureObj.serialized; 
     
-    // Tron expects signature as hex string of r + s + v
-    const signature = signatureObj.serialized; // This is a hex string
-    
-    // Append to transaction
     return {
       ...transaction,
       signature: [signature]

@@ -3,6 +3,7 @@ import React from 'react';
 import { ShieldCheck, ArrowRight, Hexagon, Lock, Zap } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { BrandLogo } from '../../../components/ui/BrandLogo';
 
 interface WalletOnboardingProps {
   input: string;
@@ -17,51 +18,53 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
   
   return (
     <div className={`
-      min-h-screen flex flex-col items-center justify-center p-6 bg-[#020617] text-white relative overflow-hidden
+      min-h-screen flex flex-col items-center justify-center p-6 bg-[#f8fafc] text-slate-900 relative overflow-hidden
       transition-all duration-1000 ease-in-out
-      ${isExiting ? 'opacity-0 scale-105 filter blur-sm bg-black' : 'opacity-100 scale-100'}
+      ${isExiting ? 'opacity-0 scale-105 filter blur-md bg-white' : 'opacity-100 scale-100'}
     `}>
       
-      {/* --- Desktop Only: Dynamic Background --- */}
-      <div className="hidden md:block absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[120px] animate-float"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-600/10 rounded-full blur-[120px] animate-float" style={{ animationDelay: '2s' }}></div>
+      {/* Dynamic Background */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-40">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-[#0062ff]/10 rounded-full blur-[150px]"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-[#00d4ff]/10 rounded-full blur-[150px]"></div>
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
       </div>
 
       <div className="max-w-md w-full relative z-10 animate-tech-in">
         
         {/* Header Section */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-2xl mb-6 md:shadow-2xl md:shadow-indigo-900/50 md:transform md:rotate-45 md:border md:border-white/10 transition-transform">
-            {/* Mobile: No rotation, high contrast icon. Desktop: Rotated */}
-            <ShieldCheck className="w-10 h-10 text-white md:transform md:-rotate-45" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#0062ff] to-[#00d4ff] rounded-2xl mb-6 shadow-[0_10px_30px_rgba(0,98,255,0.15)] relative">
+            <BrandLogo size={40} color="white" />
+            {/* BETA 标识移动到右下角 */}
+            <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-white text-slate-900 text-[7px] font-black rounded border border-slate-100 shadow-sm uppercase tracking-tighter">
+              {t('wallet.beta')}
+            </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2 text-white">{t('wallet.title')}</h1>
-          <p className="text-slate-400 font-medium text-lg">{t('wallet.intro')}</p>
+          <h1 className="text-4xl font-black tracking-tighter mb-2 text-slate-900 uppercase italic flex items-center justify-center gap-2">
+            WALLET <span className="text-[#0062ff]">RPC</span>
+          </h1>
+          <p className="text-slate-500 font-medium text-lg tracking-tight">{t('wallet.intro')}</p>
         </div>
         
         {/* Login Container */}
-        {/* Mobile: High Contrast Border Wrapper, No Blur. Desktop: Blur, Glassmorphism */}
         <div className="relative group">
-          {/* Mobile High-Contrast Border */}
-          <div className="md:hidden absolute -inset-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 rounded-3xl opacity-100"></div>
+          <div className="absolute -inset-0.5 bg-gradient-to-r from-[#0062ff] to-[#00d4ff] rounded-3xl opacity-10 blur group-hover:opacity-20 transition-opacity"></div>
           
-          <div className="relative bg-[#0b1121] md:bg-slate-900/60 md:backdrop-blur-xl border border-slate-800 md:border-white/10 rounded-3xl p-8 shadow-2xl">
+          <div className="relative bg-white border border-slate-200 rounded-3xl p-8 shadow-2xl">
              <div className="flex items-center justify-between mb-6">
                <div className="flex items-center space-x-2">
-                 <Lock className="w-4 h-4 text-indigo-400" />
-                 <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest">{t('wallet.connect_title')}</span>
+                 <Lock className="w-4 h-4 text-[#0062ff]" />
+                 <span className="text-xs font-bold text-[#0062ff] uppercase tracking-[0.2em]">{t('wallet.connect_title')}</span>
                </div>
-               <div className="md:hidden">
-                 <Zap className="w-4 h-4 text-yellow-400" />
-               </div>
+               <Zap className="w-4 h-4 text-[#0062ff] animate-pulse" />
              </div>
 
              <div className="space-y-6">
                <div>
                  <textarea
-                   className="w-full p-4 bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl font-mono text-base text-white placeholder:text-slate-600 focus:ring-0 outline-none transition-colors resize-none shadow-inner"
-                   placeholder="Mnemonic Phrase or Private Key"
+                   className="w-full p-4 bg-slate-50 border border-slate-200 focus:border-[#0062ff]/50 rounded-xl font-mono text-base text-slate-900 placeholder:text-slate-400 focus:ring-0 outline-none transition-all resize-none shadow-inner"
+                   placeholder="Private Key / Mnemonic"
                    rows={3}
                    value={input}
                    onChange={(e) => setInput(e.target.value)}
@@ -78,35 +81,33 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
                
                <Button 
                   onClick={onImport} 
-                  className="w-full py-4 text-lg font-bold bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg md:shadow-indigo-900/40 rounded-xl transition-all border-t border-white/10" 
+                  className="w-full py-4 text-lg font-black bg-[#0062ff] hover:bg-[#0052d9] text-white rounded-xl transition-all shadow-[0_4px_20px_rgba(0,98,255,0.2)]" 
                   disabled={!input || isExiting}
                   isLoading={isExiting}
                   icon={!isExiting ? <ArrowRight className="w-5 h-5" /> : undefined}
                >
-                 {isExiting ? 'Unlocking...' : 'Unlock Vault'}
+                 {isExiting ? 'SECURE_BOOT' : 'BOOT_WALLET'}
                </Button>
              </div>
 
              {error && (
-              <div className="mt-6 p-4 bg-red-950/50 border border-red-500/30 rounded-xl flex items-start animate-shake">
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start animate-shake">
                 <Hexagon className="w-5 h-5 text-red-500 mr-3 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-200 font-medium">{error}</p>
+                <p className="text-sm text-red-700 font-medium">{error}</p>
               </div>
              )}
           </div>
         </div>
 
         {/* Security Footnote */}
-        <div className="mt-8 text-center space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-3 text-xs text-slate-500">
-             <div className="flex items-center px-3 py-1 bg-slate-900/80 rounded-full border border-slate-800">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                <span>Client-Side Encryption</span>
-             </div>
-             <div className="flex items-center px-3 py-1 bg-slate-900/80 rounded-full border border-slate-800">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                <span>Zero Telemetry</span>
-             </div>
+        <div className="mt-10 text-center space-y-4">
+          <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed italic opacity-40 px-6">
+             {t('wallet.disclaimer')}
+          </p>
+          <div className="flex items-center justify-center space-x-6 text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
+             <span className="flex items-center"><ShieldCheck className="w-3 h-3 mr-1 text-[#0062ff]" /> AES-256</span>
+             <span className="flex items-center"><Zap className="w-3 h-3 mr-1 text-[#0062ff]" /> LOW_LATENCY</span>
+             <span className="flex items-center"><BrandLogo size={12} className="mr-1 text-[#0062ff]" /> LOCAL_ONLY</span>
           </div>
         </div>
       </div>

@@ -1,216 +1,113 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus Vault</title>
+    <title>Wallet RPC</title>
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
       :root {
-        --bg-slate-50: #f8fafc;
-        --bg-slate-100: #f1f5f9;
-        --bg-slate-200: #e2e8f0;
-        --bg-slate-800: #1e293b;
-        --bg-slate-900: #0f172a;
-        --text-slate-300: #cbd5e1;
-        --text-slate-400: #94a3b8;
-        --text-slate-500: #64748b;
-        --text-slate-600: #475569;
-        --text-slate-900: #0f172a;
-        --text-white: #ffffff;
-        --primary-600: #4f46e5;
-        --primary-700: #4338ca;
-        --danger-600: #dc2626;
-        --success-600: #16a34a;
+        /* Day Mode Variables - Updated to Brand Blue */
+        --bg-deep: #f8fafc;
+        --bg-card: #ffffff;
+        --bg-surface: #f1f5f9;
+        --primary-accent: #0062ff;
+        --primary-glow: rgba(0, 98, 255, 0.15);
+        --text-main: #0f172a;
+        --text-dim: #475569;
+        --text-muted: #94a3b8;
+        --danger: #ef4444;
+        --border-color: rgba(0, 0, 0, 0.06);
         --font-sans: 'Inter', sans-serif;
+        --font-mono: 'JetBrains Mono', monospace;
+      }
+
+      [data-theme='dark'] {
+        --bg-deep: #0a0b0d;
+        --bg-card: #14151a;
+        --bg-surface: #1c1e24;
+        --primary-accent: #0084ff;
+        --primary-glow: rgba(0, 132, 255, 0.3);
+        --text-main: #ffffff;
+        --text-dim: #94a3b8;
+        --text-muted: #64748b;
+        --border-color: rgba(255, 255, 255, 0.06);
       }
 
       body {
         margin: 0;
         font-family: var(--font-sans);
-        background-color: var(--bg-slate-50);
-        color: var(--text-slate-900);
+        background-color: var(--bg-deep);
+        color: var(--text-main);
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+        transition: background-color 0.3s ease, color 0.3s ease;
       }
 
-      /* Utility Replacements for Tailwind */
-      .flex { display: flex; }
-      .flex-col { flex-direction: column; }
-      .items-center { align-items: center; }
-      .justify-center { justify-content: center; }
-      .justify-between { justify-content: space-between; }
-      .space-x-2 > * + * { margin-left: 0.5rem; }
-      .space-x-3 > * + * { margin-left: 0.75rem; }
-      .space-y-4 > * + * { margin-top: 1rem; }
-      .space-y-6 > * + * { margin-top: 1.5rem; }
-      .space-y-8 > * + * { margin-top: 2rem; }
-      
-      .w-full { width: 100%; }
-      .h-screen { height: 100vh; }
-      .w-64 { width: 16rem; }
-      .flex-1 { flex: 1; }
-      
-      .p-4 { padding: 1rem; }
-      .p-6 { padding: 1.5rem; }
-      .p-8 { padding: 2rem; }
-      .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-      .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-      .px-4 { padding-left: 1rem; padding-right: 1rem; }
-      .mb-2 { margin-bottom: 0.5rem; }
-      .mb-4 { margin-bottom: 1rem; }
-      .mb-6 { margin-bottom: 1.5rem; }
-      .mt-4 { margin-top: 1rem; }
-      .mr-2 { margin-right: 0.5rem; }
-      
-      .bg-white { background-color: #fff; }
-      .bg-slate-50 { background-color: var(--bg-slate-50); }
-      .bg-slate-900 { background-color: var(--bg-slate-900); }
-      .bg-indigo-600 { background-color: var(--primary-600); }
-      
-      .text-white { color: var(--text-white); }
-      .text-slate-300 { color: var(--text-slate-300); }
-      .text-slate-500 { color: var(--text-slate-500); }
-      .text-slate-900 { color: var(--text-slate-900); }
-      .text-sm { font-size: 0.875rem; }
-      .text-xs { font-size: 0.75rem; }
-      .text-lg { font-size: 1.125rem; }
-      .text-xl { font-size: 1.25rem; }
-      .text-2xl { font-size: 1.5rem; }
-      .font-bold { font-weight: 700; }
-      .font-medium { font-weight: 500; }
-      
-      .rounded-lg { border-radius: 0.5rem; }
-      .rounded-xl { border-radius: 0.75rem; }
-      .rounded-full { border-radius: 9999px; }
-      
-      .border { border: 1px solid #e2e8f0; }
-      .border-b { border-bottom: 1px solid #e2e8f0; }
-      .border-slate-200 { border-color: var(--bg-slate-200); }
-      .border-slate-800 { border-color: #334155; }
-      
-      .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
-      
-      /* Grid */
-      .grid { display: grid; }
-      .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
-      .gap-6 { gap: 1.5rem; }
-      @media (min-width: 768px) {
-        .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      ::-webkit-scrollbar {
+        width: 6px;
       }
-      @media (min-width: 1024px) {
-        .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      ::-webkit-scrollbar-track {
+        background: var(--bg-deep);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--bg-surface);
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--primary-accent);
       }
 
-      /* Interactive */
-      button { cursor: pointer; }
-      .hover\:bg-slate-800:hover { background-color: #1e293b; }
-      .hover\:bg-indigo-700:hover { background-color: var(--primary-700); }
-      
-      /* Form */
-      input, select, textarea {
-        display: block;
-        width: 100%;
-        border-radius: 0.5rem;
-        border: 1px solid #cbd5e1;
-        padding: 0.5rem 0.75rem;
-        font-size: 0.875rem;
-        box-sizing: border-box; 
-      }
-      input:focus, select:focus, textarea:focus {
-        outline: 2px solid var(--primary-600);
-        border-color: transparent;
+      .transition-all { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+
+      @keyframes techSlideIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
       
-      /* Utilities specific to Wallet */
-      .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-      .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-      /* --- Tech Animations (Desktop Only) --- */
-      
-      @media (hover: hover) and (pointer: fine) {
-        @keyframes techSlideIn {
-          from { opacity: 0; transform: translateY(20px) scale(0.95); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-
-        @keyframes glow-pulse {
-          0%, 100% { box-shadow: 0 0 15px rgba(79, 70, 229, 0.2); }
-          50% { box-shadow: 0 0 25px rgba(79, 70, 229, 0.5); }
-        }
-
-        .animate-tech-in {
-          animation: techSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-
-        .animate-float {
-          animation: float 6s ease-in-out infinite;
-        }
-
-        .hover-glow:hover {
-          animation: glow-pulse 2s infinite;
-        }
-
-        .btn-tech-press {
-          transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.2s ease;
-        }
-        .btn-tech-press:active {
-          transform: scale(0.97);
-        }
+      @keyframes glow-pulse {
+        0%, 100% { box-shadow: 0 0 10px var(--primary-glow); }
+        50% { box-shadow: 0 0 20px var(--primary-glow); }
       }
 
-      /* --- Mobile Optimization (No Animation / High Contrast) --- */
-      
-      @media (hover: none), (pointer: coarse) {
-        .animate-tech-in {
-          /* Immediate appearance for performance */
-          opacity: 1;
-          transform: none;
-        }
-        
-        /* High Contrast Gradient Borders for Mobile Safety Feel */
-        .mobile-safe-border {
-          position: relative;
-          background: #fff;
-          background-clip: padding-box;
-          border: 2px solid transparent;
-          border-radius: 1rem;
-        }
-        .mobile-safe-border::before {
-          content: '';
-          position: absolute;
-          top: 0; right: 0; bottom: 0; left: 0;
-          z-index: -1;
-          margin: -2px;
-          border-radius: inherit;
-          background: linear-gradient(to right, #4f46e5, #ec4899);
-        }
-        
-        .btn-tech-press:active {
-          opacity: 0.7; /* Simple opacity change */
-        }
+      .animate-tech-in {
+        animation: techSlideIn 0.5s ease-out forwards;
       }
 
-      .animate-stagger-1 { animation-delay: 0.05s; }
-      .animate-stagger-2 { animation-delay: 0.1s; }
-      .animate-stagger-3 { animation-delay: 0.15s; }
+      .hover-glow:hover {
+        animation: glow-pulse 2s infinite;
+      }
+
+      .bg-gradient-rpc {
+        background: linear-gradient(135deg, var(--primary-accent) 0%, #00d4ff 100%);
+      }
+
+      .text-rpc {
+        color: var(--primary-accent);
+      }
+
+      .btn-rpc {
+        background: var(--primary-accent);
+        color: #ffffff;
+        font-weight: 700;
+        transition: all 0.2s;
+      }
+      .btn-rpc:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 15px var(--primary-glow);
+      }
 
       @keyframes shake {
         0%, 100% { transform: translateX(0); }
-        10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-        20%, 40%, 60%, 80% { transform: translateX(4px); }
+        25% { transform: translateX(-4px); }
+        75% { transform: translateX(4px); }
       }
       .animate-shake {
-        animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+        animation: shake 0.3s ease-in-out;
       }
-
     </style>
   <script type="importmap">
 {

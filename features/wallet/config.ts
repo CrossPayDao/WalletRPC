@@ -4,23 +4,21 @@ import { SUPPORTED_CHAINS } from '../../data/chains';
 
 // --- Safe Configuration ---
 
+/**
+ * 全局默认的 Safe 1.3.0 地址 (适用于大部分标准链)
+ */
 export const DEFAULT_SAFE_CONFIG: SafeContracts = {
   proxyFactory: "0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2",
   singleton: "0x3E5c63644E683549055b9Be8653de26E0B4CD36E",
   fallbackHandler: "0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4"
 };
 
-export const CHAIN_SAFE_CONFIGS: Record<number, SafeContracts> = {
-  // BTT Donau Testnet
-  1029: {
-    proxyFactory: "0xa7b8d2fF03627b353694e870eA07cE21C29DccF0",
-    singleton: "0x91fC153Addb1dAB12FDFBa7016CFdD24345D354b",
-    fallbackHandler: "0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4"
-  }
-};
-
-export const getSafeConfig = (chainId: number): SafeContracts => {
-  return CHAIN_SAFE_CONFIGS[chainId] || DEFAULT_SAFE_CONFIG;
+/**
+ * 获取指定链的 Safe 合约配置
+ * 逻辑：链对象自带配置 > 全局默认配置
+ */
+export const getSafeConfig = (chain: ChainConfig): SafeContracts => {
+  return chain.safeContracts || DEFAULT_SAFE_CONFIG;
 };
 
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -56,10 +54,10 @@ export const ERC20_ABI = [
 // --- Config Merger ---
 
 /**
- * Merges the modular chain data into the application's configuration format.
+ * 将模块化的链数据合并到应用的配置格式中。
  */
 export const DEFAULT_CHAINS: ChainConfig[] = SUPPORTED_CHAINS.map(chainData => ({
   ...chainData,
-  tokens: chainData.tokens.map(t => ({ ...t, isCustom: false })), // Ensure tokens are marked as non-custom default
+  tokens: chainData.tokens.map(t => ({ ...t, isCustom: false })),
   isCustom: false
 }));

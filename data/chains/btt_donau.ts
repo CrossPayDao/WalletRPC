@@ -1,5 +1,4 @@
 
-
 import { ChainData } from '../../features/wallet/types';
 
 export const bttDonau: ChainData = {
@@ -22,6 +21,17 @@ export const bttDonau: ChainData = {
   ],
   chainType: 'EVM',
   isTestnet: true,
+  gasLimits: {
+    nativeTransfer: 100000,
+    erc20Transfer: 200000,
+    safeExec: 800000,
+    safeSetup: 3000000
+  },
+  safeContracts: {
+    proxyFactory: "0xa7b8d2fF03627b353694e870eA07cE21C29DccF0",
+    singleton: "0x91fC153Addb1dAB12FDFBa7016CFdD24345D354b",
+    fallbackHandler: "0xf48f2B2d2a534e402487b3ee7C18c33Aec0Fe5e4"
+  },
   tokens: [
     { symbol: 'USDT_b', name: 'USDT (BSC)', address: '0x834982c9B0690ED7CA35e10b18887C26c25CdC82', decimals: 6 },
     { symbol: 'USDT_t', name: 'USDT (TRON)', address: '0x6d96aeae27af0cafc53f4f0ad1e27342f384d56d', decimals: 6 },

@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
-import { List, Key, Zap, Trash2, ArrowLeft, Users, Shield, Plus, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { List, Key, Zap, Trash2, ArrowLeft, Users, Shield, Plus, Clock, AlertCircle, Loader2, CheckCircle2, ShieldOff, X, ExternalLink, ChevronDown, Search, Activity } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { SafePendingTx, SafeDetails } from '../types';
 import { ethers } from 'ethers';
+import { useTranslation } from '../../../contexts/LanguageContext';
 
 // --- Safe Queue ---
 
@@ -77,7 +78,6 @@ export const SafeQueue: React.FC<SafeQueueProps> = ({
                   </span>
                 </div>
 
-                {/* Progress Bar */}
                 <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4 overflow-hidden">
                   <div 
                     className={`h-full rounded-full transition-all duration-500 ${canExecute ? 'bg-green-500' : 'bg-amber-500'}`} 
@@ -122,16 +122,28 @@ export const SafeQueue: React.FC<SafeQueueProps> = ({
 
 // --- Safe Settings ---
 
+type ProcessStep = 'idle' | 'building' | 'syncing' | 'verifying' | 'success' | 'vanishing' | 'error';
+type OpType = 'add' | 'remove';
+
+interface OptimisticOp {
+  address: string;
+  type: OpType;
+  step: ProcessStep;
+  error?: string;
+}
+
 interface SafeSettingsProps {
   safeDetails: SafeDetails;
-  onRemoveOwner: (owner: string, threshold: number) => void;
-  onAddOwner: (owner: string, threshold: number) => void;
-  onChangeThreshold: (threshold: number) => void;
+  walletAddress?: string;
+  onRemoveOwner: (owner: string, threshold: number) => Promise<boolean>;
+  onAddOwner: (owner: string, threshold: number) => Promise<boolean>;
+  onChangeThreshold: (threshold: number) => Promise<boolean>;
   onBack: () => void;
 }
 
 export const SafeSettings: React.FC<SafeSettingsProps> = ({
   safeDetails,
+  walletAddress,
   onRemoveOwner,
   onAddOwner,
   onChangeThreshold,
@@ -139,6 +151,165 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
 }) => {
   const [newOwnerInput, setNewOwnerInput] = useState('');
   const [newThresholdSelect, setNewThresholdSelect] = useState(safeDetails.threshold);
+  
+  const [optimisticOps, setOptimisticOps] = useState<OptimisticOp[]>([]);
+
+  const isOwner = useMemo(() => {
+    if (!walletAddress) return false;
+    return safeDetails.owners.some(o => o.toLowerCase() === walletAddress.toLowerCase());
+  }, [safeDetails.owners, walletAddress]);
+
+  // 核心改动：自动同步清理逻辑
+  // 当链上数据 (safeDetails.owners) 发生变化时，检查是否有对应的 verifying 操作可以结束了
+  useEffect(() => {
+    const currentAddrs = safeDetails.owners.map(o => o.toLowerCase());
+    
+    setOptimisticOps(prev => {
+      let changed = false;
+      const next = prev.map(op => {
+        const addrLower = op.address.toLowerCase();
+        
+        // 如果是正在核验的删除操作，且地址已从链上消失
+        if (op.type === 'remove' && op.step === 'verifying' && !currentAddrs.includes(addrLower)) {
+          changed = true;
+          return { ...op, step: 'vanishing' as const };
+        }
+        
+        // 如果是正在核验的添加操作，且地址已在链上出现
+        if (op.type === 'add' && op.step === 'verifying' && currentAddrs.includes(addrLower)) {
+          changed = true;
+          return { ...op, step: 'vanishing' as const };
+        }
+        
+        return op;
+      });
+
+      if (changed) {
+        // 触发物理清理
+        setTimeout(() => {
+          setOptimisticOps(current => current.filter(o => o.step !== 'vanishing'));
+        }, 500);
+        return next;
+      }
+      return prev;
+    });
+  }, [safeDetails.owners]);
+
+  const displayOwners = useMemo(() => {
+    const currentAddrs = safeDetails.owners.map(o => o.toLowerCase());
+    
+    const baseList = safeDetails.owners.map(addr => {
+      const addrLower = addr.toLowerCase();
+      const removalOp = optimisticOps.find(op => op.type === 'remove' && op.address.toLowerCase() === addrLower);
+      
+      return {
+        address: addr,
+        isPending: false,
+        step: removalOp ? removalOp.step : ('idle' as ProcessStep),
+        error: removalOp?.error,
+        opType: 'remove' as OpType
+      };
+    });
+
+    const pendingAdditions = optimisticOps
+      .filter(op => op.type === 'add')
+      .filter(op => {
+        if (op.step === 'vanishing') return false;
+        if (currentAddrs.includes(op.address.toLowerCase())) return false;
+        return true;
+      })
+      .map(op => ({
+        address: op.address,
+        isPending: true,
+        step: op.step,
+        error: op.error,
+        opType: 'add' as OpType
+      }));
+
+    return [...baseList, ...pendingAdditions].filter(item => item.step !== 'vanishing');
+  }, [safeDetails.owners, optimisticOps]);
+
+  const updateOpStatus = (address: string, type: OpType, updates: Partial<OptimisticOp>) => {
+    setOptimisticOps(prev => prev.map(op => 
+      (op.address.toLowerCase() === address.toLowerCase() && op.type === type) 
+      ? { ...op, ...updates } 
+      : op
+    ));
+  };
+
+  const clearOp = async (address: string, type: OpType) => {
+    updateOpStatus(address, type, { step: 'vanishing' });
+    await new Promise(r => setTimeout(r, 500));
+    setOptimisticOps(prev => prev.filter(op => 
+      !(op.address.toLowerCase() === address.toLowerCase() && op.type === type)
+    ));
+  };
+
+  const handleStartAddition = async () => {
+    const inputAddr = newOwnerInput.trim();
+    if (!inputAddr || !ethers.isAddress(inputAddr)) return;
+    const targetAddress = inputAddr.toLowerCase();
+    
+    if (displayOwners.some(o => o.address.toLowerCase() === targetAddress && o.step !== 'idle')) return;
+
+    setNewOwnerInput(''); 
+    const newOp: OptimisticOp = { address: targetAddress, type: 'add', step: 'building' };
+    setOptimisticOps(prev => [...prev, newOp]);
+
+    if (!isOwner) {
+       updateOpStatus(targetAddress, 'add', { step: 'error', error: "Access Denied" });
+       return;
+    }
+
+    await new Promise(r => setTimeout(r, 600));
+    updateOpStatus(targetAddress, 'add', { step: 'syncing' });
+
+    try {
+      const result = await onAddOwner(targetAddress, safeDetails.threshold);
+      if (result) {
+        if (safeDetails.threshold === 1) {
+           updateOpStatus(targetAddress, 'add', { step: 'verifying' });
+        } else {
+           updateOpStatus(targetAddress, 'add', { step: 'success' });
+           setTimeout(() => clearOp(targetAddress, 'add'), 3000);
+        }
+      }
+    } catch (e: any) {
+      updateOpStatus(targetAddress, 'add', { step: 'error', error: e.message });
+    }
+  };
+
+  const handleStartRemoval = async (owner: string) => {
+    const targetAddress = owner.toLowerCase();
+    
+    // 修复：严谨检查当前地址是否已经有在运行的任务
+    if (optimisticOps.some(op => op.address.toLowerCase() === targetAddress && op.step !== 'idle')) return;
+
+    const newOp: OptimisticOp = { address: targetAddress, type: 'remove', step: 'building' };
+    setOptimisticOps(prev => [...prev, newOp]);
+
+    if (!isOwner) {
+      updateOpStatus(targetAddress, 'remove', { step: 'error', error: "Access Denied" });
+      return;
+    }
+
+    await new Promise(r => setTimeout(r, 600));
+    updateOpStatus(targetAddress, 'remove', { step: 'syncing' });
+    
+    try {
+      const result = await onRemoveOwner(owner, Math.max(1, safeDetails.threshold - 1));
+      if (result) {
+        if (safeDetails.threshold === 1) {
+           updateOpStatus(targetAddress, 'remove', { step: 'verifying' });
+        } else {
+           updateOpStatus(targetAddress, 'remove', { step: 'success' });
+           setTimeout(() => clearOp(targetAddress, 'remove'), 2000);
+        }
+      }
+    } catch (e: any) {
+      updateOpStatus(targetAddress, 'remove', { step: 'error', error: e.message });
+    }
+  };
 
   return (
     <div className="space-y-6 animate-tech-in">
@@ -149,83 +320,129 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
          <h2 className="text-lg font-bold text-slate-900">Safe Settings</h2>
       </div>
       
-      {/* Owners List */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-5 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center">
              <Users className="w-4 h-4 text-slate-400 mr-2" />
-             <h3 className="font-bold text-sm text-slate-700 uppercase tracking-wide">Owners</h3>
+             <h3 className="font-bold text-sm text-slate-700 uppercase tracking-widest">Ownership Matrix</h3>
           </div>
-          <span className="text-xs bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-full font-bold border border-indigo-200">
-            Threshold: {safeDetails.threshold} / {safeDetails.owners.length}
+          <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 font-black uppercase tracking-tighter">
+            Consensus: {safeDetails.threshold} / {safeDetails.owners.length}
           </span>
         </div>
         
-        <div className="divide-y divide-slate-50">
-          {safeDetails.owners.map((owner, idx) => (
-            <div key={owner} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors group">
-              <div className="flex items-center">
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 mr-3">
-                   {idx + 1}
+        <div className="divide-y divide-slate-50 relative">
+          {displayOwners.map((item, idx) => {
+            const step = item.step as ProcessStep;
+            const error = item.error;
+            const showOverlay = step !== 'idle';
+            const isError = step === 'error';
+
+            return (
+              <div 
+                key={`${item.address}-${item.opType}`} 
+                className={`
+                  p-4 flex justify-between items-center transition-all duration-500 group relative overflow-hidden
+                  ${item.isPending ? 'bg-green-50/10' : 'hover:bg-slate-50'}
+                `}
+              >
+                {showOverlay && (
+                  <div className={`absolute inset-0 z-10 flex items-center px-4 animate-in fade-in duration-300 ${isError ? 'bg-red-50/95' : 'bg-white/90 backdrop-blur-[1px]'}`}>
+                    <div className="flex items-center space-x-3 w-full">
+                       <div className="w-8 h-8 flex items-center justify-center">
+                          {step === 'building' && <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />}
+                          {step === 'syncing' && <Zap className="w-5 h-5 text-amber-500 animate-pulse" />}
+                          {step === 'verifying' && <Activity className="w-5 h-5 text-[#0062ff] animate-[pulse_1.5s_infinite]" />}
+                          {step === 'success' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+                          {step === 'error' && <ShieldOff className="w-5 h-5 text-red-500 animate-shake" />}
+                       </div>
+                       <div className="flex-1 min-w-0">
+                          <div className={`text-[10px] font-black uppercase tracking-[0.2em] mb-0.5 truncate ${isError ? 'text-red-600' : (step === 'verifying' ? 'text-[#0062ff]' : 'text-slate-400')}`}>
+                             {step === 'building' && "Constructing Proposal..."}
+                             {step === 'syncing' && "Broadcasting to RPC..."}
+                             {step === 'verifying' && "Scanning Chain for Inclusion..."}
+                             {step === 'success' && (safeDetails.threshold === 1 ? "Inclusion Verified" : "Proposal Created")}
+                             {step === 'error' && (error || "Operational Fault")}
+                          </div>
+                          {!isError && (
+                            <div className="h-1 bg-slate-100 rounded-full overflow-hidden w-full max-w-[120px]">
+                               <div 
+                                  className={`h-full transition-all duration-700 ${step === 'verifying' ? 'bg-[#0062ff] animate-pulse' : 'bg-indigo-500'}`} 
+                                  style={{ width: step === 'building' ? '30%' : step === 'syncing' ? '60%' : step === 'verifying' ? '85%' : '100%' }}
+                               ></div>
+                            </div>
+                          )}
+                       </div>
+                       {(isError || step === 'success') && (
+                         <button 
+                           onClick={() => clearOp(item.address, item.opType)}
+                           className="p-1 hover:bg-slate-200 rounded-full text-slate-400"
+                         >
+                           <X className="w-4 h-4" />
+                         </button>
+                       )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center min-w-0 flex-1">
+                  <div className={`
+                    w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black mr-3 flex-shrink-0 transition-colors
+                    ${item.isPending ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}
+                  `}>
+                     {item.isPending ? <Plus className="w-3.5 h-3.5" /> : (idx + 1)}
+                  </div>
+                  <span className={`font-mono text-sm truncate uppercase tracking-tight ${item.isPending ? 'text-green-700 italic font-bold' : 'text-slate-600'}`}>
+                    {item.address}
+                  </span>
                 </div>
-                <span className="font-mono text-sm text-slate-600">{owner}</span>
+
+                {!item.isPending && safeDetails.owners.length > 1 && !showOverlay && (
+                  <button 
+                    onClick={() => handleStartRemoval(item.address)} 
+                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-all flex-shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
-              {safeDetails.owners.length > 1 && (
-                <button 
-                  onClick={() => onRemoveOwner(owner, Math.max(1, safeDetails.threshold - 1))} 
-                  className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                  title="Remove Owner"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
         
-        {/* Add Owner Footer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-100">
+        <div className="p-4 bg-slate-50/50 border-t border-slate-100">
           <div className="flex gap-2">
              <div className="relative flex-1">
                 <input 
-                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-100 outline-none" 
-                  placeholder="New Owner Address (0x...)" 
+                  className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-mono focus:ring-4 focus:ring-indigo-50 outline-none transition-all" 
+                  placeholder="Insert Registry Address (0x...)" 
                   value={newOwnerInput}
                   onChange={e => setNewOwnerInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleStartAddition()}
                 />
-                <Plus className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <Plus className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
              </div>
-             <Button 
-               onClick={() => { if(newOwnerInput) onAddOwner(newOwnerInput, safeDetails.threshold); }} 
-               className="text-xs px-4 h-auto btn-tech-press"
-               disabled={!newOwnerInput}
-             >
-               Add
+             <Button onClick={handleStartAddition} className="text-xs px-5 h-auto" disabled={!newOwnerInput.trim()}>
+               PROPOSE
              </Button>
           </div>
         </div>
       </div>
       
-      {/* Threshold Card */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
         <div>
-           <span className="text-sm font-bold text-slate-800 block">Update Threshold</span>
-           <span className="text-xs text-slate-400">Signatures required to execute transactions.</span>
+           <span className="text-sm font-bold text-slate-800 block uppercase italic tracking-tighter">Adjust Consensus Threshold</span>
+           <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Signatures required for vault authorization.</span>
         </div>
-        <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+        <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-xl border border-slate-100 w-full md:w-auto">
           <select 
-            className="bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 cursor-pointer py-1 pl-2 pr-6" 
+            className="bg-transparent border-none text-sm font-black text-slate-700 focus:ring-0 cursor-pointer py-1 pl-2 pr-8 flex-1 md:flex-none" 
             value={newThresholdSelect}
             onChange={e => setNewThresholdSelect(Number(e.target.value))}
           >
-            {safeDetails.owners.map((_, i) => <option key={i} value={i+1}>{i+1}</option>)}
+            {displayOwners.filter(o => !o.isPending).map((_, i) => <option key={i} value={i+1}>{i+1} SIG</option>)}
           </select>
-          <Button 
-            onClick={() => onChangeThreshold(newThresholdSelect)} 
-            className="text-xs py-1.5 h-auto btn-tech-press"
-          >
-            Update
-          </Button>
+          <Button onClick={() => onChangeThreshold(newThresholdSelect)} className="text-xs py-2 h-auto">UPDATE</Button>
         </div>
       </div>
     </div>
@@ -238,71 +455,88 @@ interface CreateSafeProps {
   onDeploy: (owners: string[], threshold: number) => void;
   onCancel: () => void;
   isDeploying: boolean;
+  walletAddress?: string;
 }
 
-export const CreateSafe: React.FC<CreateSafeProps> = ({ onDeploy, onCancel, isDeploying }) => {
-  const [owners, setOwners] = useState<string[]>(['']);
+export const CreateSafe: React.FC<CreateSafeProps> = ({ onDeploy, onCancel, isDeploying, walletAddress }) => {
+  const [owners, setOwners] = useState<string[]>(() => [walletAddress || '']);
   const [threshold, setThreshold] = useState(1);
-
   return (
     <div className="animate-tech-in">
       <div className="flex items-center mb-6">
          <button onClick={onCancel} className="p-2 -ml-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition-colors mr-2">
             <ArrowLeft className="w-5 h-5" />
          </button>
-         <h2 className="font-bold text-xl text-slate-900">Deploy New Safe</h2>
+         <h2 className="font-bold text-xl text-slate-900 uppercase italic tracking-tight">Deploy Safe Vault</h2>
       </div>
-
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-lg space-y-6">
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-xs font-bold text-slate-500 uppercase flex items-center">
-               <Users className="w-3 h-3 mr-1" /> Initial Owners
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+               <Users className="w-3 h-3 mr-1" /> Initial Registry Owners
             </label>
-            {owners.map((owner, i) => (
-              <div key={i} className="flex gap-2 animate-tech-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                <input 
-                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-indigo-100 outline-none" 
-                  value={owner} 
-                  onChange={e => { const n = [...owners]; n[i] = e.target.value; setOwners(n); }} 
-                  placeholder="0x..."
-                />
-                {owners.length > 1 && (
-                  <button onClick={() => setOwners(owners.filter((_, idx) => idx !== i))} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button onClick={() => setOwners([...owners, ''])} className="text-xs text-indigo-600 font-bold hover:text-indigo-700 flex items-center mt-2 px-1">
-              <Plus className="w-3 h-3 mr-1" /> Add Another Owner
-            </button>
+            {owners.length === 0 ? (
+               <div className="p-8 border border-dashed border-slate-200 rounded-xl text-center bg-slate-50/30">
+                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] mb-4">No owners specified</p>
+                  <Button onClick={() => setOwners([''])} variant="secondary" className="text-xs">
+                     Add First Owner
+                  </Button>
+               </div>
+            ) : (
+               owners.map((owner, i) => (
+                 <div key={i} className="flex gap-2 animate-tech-in" style={{ animationDelay: `${i * 0.05}s` }}>
+                   <input 
+                     className="flex-1 border border-slate-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-indigo-100 outline-none" 
+                     value={owner} 
+                     onChange={e => { const n = [...owners]; n[i] = e.target.value; setOwners(n); }} 
+                     placeholder="0x..."
+                   />
+                   <button 
+                     onClick={() => setOwners(owners.filter((_, idx) => idx !== i))} 
+                     className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                     title="Remove owner"
+                   >
+                     <Trash2 className="w-4 h-4" />
+                   </button>
+                 </div>
+               ))
+            )}
+            {owners.length > 0 && (
+               <button onClick={() => setOwners([...owners, ''])} className="text-[10px] text-indigo-600 font-black uppercase tracking-[0.2em] hover:text-indigo-700 flex items-center mt-2 px-1">
+                 <Plus className="w-3 h-3 mr-1.5" /> Append Member
+               </button>
+            )}
           </div>
-          
           <div className="pt-2">
-            <label className="text-xs font-bold text-slate-500 uppercase flex items-center mb-2">
-               <Shield className="w-3 h-3 mr-1" /> Signature Threshold
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center mb-2">
+               <Shield className="w-3 h-3 mr-1" /> Governance Threshold
             </label>
-            <div className="inline-block relative">
+            <div className="inline-block relative w-full">
                <select 
-                  className="appearance-none bg-slate-50 border border-slate-200 rounded-lg pl-4 pr-8 py-2 text-sm font-bold text-slate-700 cursor-pointer hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all" 
+                  className="appearance-none w-full bg-slate-50 border border-slate-200 rounded-lg pl-4 pr-10 py-3 text-sm font-black text-slate-700 cursor-pointer hover:border-indigo-300 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all uppercase" 
                   value={threshold} 
                   onChange={e => setThreshold(Number(e.target.value))}
+                  disabled={owners.length === 0}
                >
-                  {owners.map((_, i) => <option key={i} value={i+1}>{i+1} Signatures</option>)}
+                  {owners.length === 0 ? (
+                     <option value={1}>1 Signature Required</option>
+                  ) : (
+                     owners.map((_, i) => <option key={i} value={i+1}>{i+1} Signatures Required</option>)
+                  )}
                </select>
-               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
-                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                  <ChevronDown className="h-4 w-4" />
                </div>
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-               Any transaction requires confirmation from {threshold} out of {owners.length} owners.
-            </p>
           </div>
-          
           <div className="pt-6 border-t border-slate-100 mt-2">
-            <Button onClick={() => onDeploy(owners, threshold)} isLoading={isDeploying} className="w-full py-3 shadow-lg shadow-indigo-100 btn-tech-press">
-              Deploy Safe Contract
+            <Button 
+               onClick={() => onDeploy(owners.filter(o => o.trim() !== ''), threshold)} 
+               isLoading={isDeploying} 
+               className="w-full py-4 shadow-xl shadow-indigo-100 btn-tech-press"
+               disabled={owners.filter(o => o.trim() !== '').length === 0}
+            >
+              EXECUTE_DEPLOYMENT_SIG
             </Button>
           </div>
         </div>
@@ -311,45 +545,46 @@ export const CreateSafe: React.FC<CreateSafeProps> = ({ onDeploy, onCancel, isDe
   );
 };
 
-// --- Track Safe ---
+// --- Track Existing Safe ---
 
 interface TrackSafeProps {
   onTrack: (address: string) => void;
   onCancel: () => void;
-  isLoading?: boolean;
+  isLoading: boolean;
 }
 
 export const TrackSafe: React.FC<TrackSafeProps> = ({ onTrack, onCancel, isLoading }) => {
+  const { t } = useTranslation();
   const [address, setAddress] = useState('');
-
+  const [localError, setLocalError] = useState<string | null>(null);
+  useEffect(() => { if (localError) setLocalError(null); }, [address]);
+  const handleValidation = () => {
+    const trimmed = address.trim();
+    if (!trimmed) { setLocalError(t("safe.error_empty")); return; }
+    if (!trimmed.startsWith('0x')) { setLocalError(t("safe.error_prefix")); return; }
+    if (trimmed.length !== 42) { setLocalError(t("safe.error_length")); return; }
+    if (!ethers.isAddress(trimmed)) { setLocalError(t("safe.error_format")); return; }
+    onTrack(trimmed);
+  };
   return (
     <div className="max-w-md mx-auto animate-tech-in">
       <div className="flex items-center mb-6">
          <button onClick={onCancel} className="p-2 -ml-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-700 transition-colors mr-2">
             <ArrowLeft className="w-5 h-5" />
          </button>
-         <h2 className="font-bold text-xl text-slate-900">Track Existing Safe</h2>
+         <h2 className="font-bold text-xl text-slate-900 uppercase italic tracking-tight">Sync Existing Safe</h2>
       </div>
-
-      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-lg">
-        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Safe Contract Address</label>
-        <div className="relative mb-6">
-           <input 
-             className="w-full pl-4 pr-4 py-3 border border-slate-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all" 
-             placeholder="0x..." 
-             value={address}
-             onChange={e => setAddress(e.target.value)}
-           />
+      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-lg relative group overflow-hidden">
+        <div className={`absolute top-0 left-0 right-0 h-1 transition-colors duration-300 ${localError ? 'bg-red-500' : 'bg-indigo-500 opacity-20 group-hover:opacity-40'}`}></div>
+        <label className={`text-[10px] font-black uppercase block mb-3 transition-colors duration-200 tracking-widest ${localError ? 'text-red-500' : 'text-slate-400'}`}>Target Registry Address</label>
+        <div className="relative mb-2">
+           <input className={`w-full px-4 py-4 border rounded-xl font-mono text-sm outline-none transition-all duration-200 shadow-inner ${localError ? 'border-red-300 bg-red-50/30 ring-2 ring-red-100 animate-shake' : 'border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-400'}`} placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleValidation()} />
         </div>
-        
-        <Button 
-           onClick={() => { if(ethers.isAddress(address)) onTrack(address); }} 
-           className="w-full py-3 shadow-lg shadow-indigo-100 btn-tech-press"
-           disabled={!address}
-           isLoading={isLoading}
-        >
-          Add to Watchlist
-        </Button>
+        <div className={`flex items-center space-x-2 mb-6 transition-all duration-300 h-6 ${localError ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
+           <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+           <span className="text-[9px] font-black uppercase text-red-600 tracking-tighter italic">{localError}</span>
+        </div>
+        <Button onClick={handleValidation} className={`w-full py-4 shadow-lg transition-all duration-300 ${localError ? 'bg-red-500 shadow-red-100' : 'bg-indigo-600 shadow-indigo-100'} hover:scale-[1.01]`} disabled={!address.trim()} isLoading={isLoading}>INITIATE_WATCHLIST_SYNC</Button>
       </div>
     </div>
   );

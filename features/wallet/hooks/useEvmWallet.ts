@@ -8,19 +8,13 @@ import { useWalletState } from './useWalletState';
 import { useWalletData } from './useWalletData';
 import { useTransactionManager } from './useTransactionManager';
 import { useSafeManager } from './useSafeManager';
+import { useTranslation } from '../../../contexts/LanguageContext';
 
 /**
  * Hook: useEvmWallet
- * 
- * 作用:
- * Nexus Vault (Wallet) 的主控制器。
- * 此文件已被重构为组合层，逻辑被拆分至子 Hook 中：
- * - useWalletState: UI 状态
- * - useWalletData: 数据获取
- * - useTransactionManager: 交易处理
- * - useSafeManager: Safe 管理
  */
 export const useEvmWallet = () => {
+  const { t } = useTranslation();
   
   // 1. 持久化存储
   const {
@@ -72,11 +66,12 @@ export const useEvmWallet = () => {
   });
 
   // 4. 交易与 Safe 管理 (使用 Ref 解决循环依赖: TxMgr <-> SafeMgr)
-  const safeHandlerRef = useRef<(to: string, value: bigint, data: string, summary: string) => Promise<void>>(async () => {});
+  // Fix: Type mismatch for safeHandlerRef - updating signature to match useSafeManager's handleSafeProposal
+  const safeHandlerRef = useRef<(to: string, value: bigint, data: string, summary?: string) => Promise<boolean>>(async () => false);
   
   const txMgr = useTransactionManager({
     wallet,
-    tronPrivateKey, // Pass dedicated tron key
+    tronPrivateKey, 
     activeAddress,
     activeChain,
     activeChainTokens,
@@ -87,7 +82,8 @@ export const useEvmWallet = () => {
     fetchData: dataLayer.fetchData,
     setNotification,
     setError,
-    handleSafeProposal: async (t, v, d, s) => safeHandlerRef.current(t, v, d, s)
+    // Fix: Explicitly return Promise<void> to satisfy useTransactionManager's prop type
+    handleSafeProposal: async (t, v, d, s) => { await safeHandlerRef.current(t, v, d, s); }
   });
 
   const safeMgr = useSafeManager({
@@ -108,26 +104,20 @@ export const useEvmWallet = () => {
     addTransactionRecord: txMgr.addTransactionRecord
   });
   
-  // 更新 Ref 指向真实的 Safe 处理函数
   useEffect(() => {
     safeHandlerRef.current = safeMgr.handleSafeProposal;
   }, [safeMgr.handleSafeProposal]);
 
-  // 副作用处理: 网络切换时，如果 Safe 不在当前网络，则切回 EOA
   useEffect(() => {
     if (activeAccountType === 'SAFE') {
-       // 检查当前选中的 Safe 是否属于新切换的 Chain
        const isSafeValidOnChain = trackedSafes.some(
           s => s.address === activeSafeAddress && s.chainId === activeChainId
        );
-
-       // 额外检查: TRON 不支持 Safe
        const isTron = activeChain.chainType === 'TRON';
 
        if (!isSafeValidOnChain || isTron) {
           state.setActiveAccountType('EOA');
           state.setActiveSafeAddress(null);
-          // 如果不在 dashboard 也不用强制切，但如果是 safe_queue 或 settings 这种专属页面，最好切回 dashboard
           if (view === 'safe_queue' || view === 'settings') {
              setView('dashboard');
           }
@@ -149,7 +139,6 @@ export const useEvmWallet = () => {
     }
   }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChainTokens]);
 
-  // Token 管理辅助函数
   const confirmAddToken = async (address: string) => {
      if (activeChain.chainType === 'TRON') {
          setError("当前版本暂不支持 Tron 自定义代币");
@@ -160,14 +149,33 @@ export const useEvmWallet = () => {
      setError(null);
      try {
         if (!provider) throw new Error("Provider 未初始化");
+        
+        // Fix: Check for contract code before calling symbol/decimals
+        const code = await provider.getCode(address);
+        if (code === '0x' || code === '0x0') {
+           throw new Error("NOT_A_CONTRACT");
+        }
+
         const contract = new ethers.Contract(address, ERC20_ABI, provider);
-        const [symbol, decimals, name] = await Promise.all([ contract.symbol(), contract.decimals(), contract.name() ]);
+        const [symbol, decimals, name] = await Promise.all([ 
+            contract.symbol().catch(() => "UNKNOWN"), 
+            contract.decimals().catch(() => 18), 
+            contract.name().catch(() => "Unknown Token") 
+        ]);
+        
         const newToken: TokenConfig = { symbol, name, decimals: Number(decimals), address: address, isCustom: true };
         
         setCustomTokens(prev => ({ ...prev, [activeChainId]: [...(prev[activeChainId] || []), newToken] }));
         setNotification(`已添加 ${symbol}`);
         state.setIsAddTokenModalOpen(false); 
-     } catch (e) { console.error(e); setError("在该网络上未找到此代币合约"); } finally { state.setIsAddingToken(false); }
+     } catch (e: any) { 
+        console.error(e); 
+        if (e.message === "NOT_A_CONTRACT") {
+            setError("无效地址：目标不是一个合约。");
+        } else {
+            setError("代币导入失败：无法识别此代币。"); 
+        }
+     } finally { state.setIsAddingToken(false); }
   };
 
   const handleUpdateToken = (updated: TokenConfig) => { 
@@ -197,44 +205,61 @@ export const useEvmWallet = () => {
      state.setIsChainModalOpen(false); state.setActiveChainId(newConfig.id);
   };
 
-  /**
-   * 验证并追踪 Safe
-   * 在导入前检查合约是否存在于当前链
-   */
   const handleTrackSafe = async (address: string) => {
-      if (!ethers.isAddress(address)) {
-          setError("无效的地址格式");
+      const trimmed = address.trim();
+      setError(null);
+
+      // 1. Initial Granular Validation
+      if (!trimmed) {
+          setError(t("safe.error_empty"));
           return;
       }
-      if (!provider) {
-          setError("无法连接网络进行验证");
+      if (!trimmed.startsWith('0x')) {
+          setError(t("safe.error_prefix"));
+          return;
+      }
+      if (trimmed.length !== 42) {
+          setError(t("safe.error_length"));
+          return;
+      }
+      if (!ethers.isAddress(trimmed)) {
+          setError(t("safe.error_format"));
           return;
       }
 
-      setIsLoading(true); // Start loading animation
+      if (!provider) {
+          setError("RPC connection failure. Please check your network settings.");
+          return;
+      }
+
+      setIsLoading(true);
       try {
-          // 验证是否为合约
-          const code = await provider.getCode(address);
+          // 2. On-chain validation
+          const code = await provider.getCode(trimmed);
           if (code === '0x') {
-              throw new Error("Target address is not a contract");
+              throw new Error("NOT_A_CONTRACT");
           }
 
-          // 添加到列表
+          // 3. Success -> Add to watchlist
           setTrackedSafes(prev => [...prev, { 
-              address: address, 
-              name: `Safe ${address.slice(0,4)}`, 
+              address: trimmed, 
+              name: `Safe ${trimmed.slice(0,4)}`, 
               chainId: activeChainId 
           }]);
           
           state.setActiveAccountType('SAFE');
-          state.setActiveSafeAddress(address);
+          state.setActiveSafeAddress(trimmed);
           setView('dashboard');
-          setNotification("Safe 导入成功");
-      } catch (e) {
+          setNotification("Vault sync complete.");
+      } catch (e: any) {
           console.error(e);
-          setError("导入失败: 该地址在当前网络不是有效的合约。请检查网络设置或地址。");
+          if (e.message === "NOT_A_CONTRACT") {
+              setError(t("safe.error_not_contract"));
+          } else {
+              setError("Network Verification Error: " + (e.reason || e.message));
+          }
       } finally {
-          setIsLoading(false); // Stop loading animation
+          setIsLoading(false);
       }
   };
 
@@ -253,7 +278,7 @@ export const useEvmWallet = () => {
     handleUpdateToken,
     handleRemoveToken,
     handleSaveChain,
-    handleTrackSafe, // Export new handler
+    handleTrackSafe,
     pendingSafeTxs
   };
 };

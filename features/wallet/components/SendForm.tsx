@@ -1,12 +1,14 @@
 
-
-import React, { useState, useEffect } from 'react';
-import { Settings, ArrowLeft, Zap, Coins } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Settings, ArrowLeft, Zap, Coins, AlertTriangle, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { ChainConfig, TokenConfig, TransactionRecord } from '../types';
 import { ProcessResult } from '../hooks/useTransactionManager';
 import { TransferStateView, TransferStatus } from './TransferStateView';
 import { getExplorerLink } from '../utils';
+import { ethers } from 'ethers';
+import { useTranslation } from '../../../contexts/LanguageContext';
+import { TronService } from '../../../services/tronService';
 
 export interface SendFormData {
   recipient: string;
@@ -16,6 +18,7 @@ export interface SendFormData {
   gasPrice: string;
   gasLimit: string;
   nonce?: number;
+  bypassBalanceCheck?: boolean;
 }
 
 interface SendFormProps {
@@ -26,6 +29,8 @@ interface SendFormProps {
   recommendedNonce: number;
   onSend: (data: SendFormData) => Promise<ProcessResult>;
   onBack: () => void;
+  onRefresh?: () => void;
+  isLoading?: boolean;
   transactions: TransactionRecord[]; // Needed to watch for updates
 }
 
@@ -37,8 +42,11 @@ export const SendForm: React.FC<SendFormProps> = ({
   recommendedNonce,
   onSend,
   onBack,
+  onRefresh,
+  isLoading,
   transactions
 }) => {
+  const { t } = useTranslation();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedAsset, setSelectedAsset] = useState('NATIVE');
@@ -47,33 +55,88 @@ export const SendForm: React.FC<SendFormProps> = ({
   const [gasLimit, setGasLimit] = useState('');
   const [customNonce, setCustomNonce] = useState<string>('');
   const [isAdvancedSend, setIsAdvancedSend] = useState(false);
+  const [hasAcknowledgedBalance, setHasAcknowledgedBalance] = useState(false);
   
   // Animation State
   const [transferStatus, setTransferStatus] = useState<TransferStatus>('idle');
   const [txHash, setTxHash] = useState<string | undefined>();
   const [errorMsg, setErrorMsg] = useState<string | undefined>();
 
+  const currentBalance = useMemo(() => {
+    return balances[selectedAsset] || '0';
+  }, [balances, selectedAsset]);
+
+  const isInsufficient = useMemo(() => {
+    const numAmount = parseFloat(amount || '0');
+    const numBalance = parseFloat(currentBalance);
+    return numAmount > numBalance;
+  }, [amount, currentBalance]);
+
+  // Recipient Address Validation Logic
+  const recipientError = useMemo(() => {
+    const addr = recipient.trim();
+    if (!addr) return null;
+
+    if (activeChain.chainType === 'TRON') {
+      // 1. Prefix and Length check
+      if (!addr.startsWith('T')) {
+        return t('tx.error_tron_prefix');
+      }
+      if (addr.length !== 34) {
+        return t('tx.error_tron_length');
+      }
+      // 2. Full Checksum Validation
+      if (!TronService.isValidBase58Address(addr)) {
+        return t('tx.error_invalid_format');
+      }
+    } else {
+      if (!addr.startsWith('0x')) {
+        return t('tx.error_evm_prefix');
+      }
+      if (addr.length !== 42) {
+        return t('tx.error_evm_length');
+      }
+      if (!ethers.isAddress(addr)) {
+        return t('tx.error_invalid_format');
+      }
+    }
+    return null;
+  }, [recipient, activeChain.chainType, t]);
+
+  // Sync balance on mount
+  useEffect(() => {
+    if (onRefresh) onRefresh();
+  }, []);
+
+  // Reset acknowledgment if amount changes to something valid
+  useEffect(() => {
+    if (!isInsufficient) {
+      setHasAcknowledgedBalance(false);
+    }
+  }, [isInsufficient]);
+
   // Watch for transaction updates while in 'timeout' (polling) state
   useEffect(() => {
     if (transferStatus === 'timeout' && txHash) {
-        // Find the specific transaction in the global list
         const tx = transactions.find(t => t.hash === txHash);
-        // If it flipped to confirmed, update UI to success immediately
         if (tx && tx.status === 'confirmed') {
             setTransferStatus('success');
         }
     }
   }, [transactions, txHash, transferStatus]);
 
-  useEffect(() => {
-    // Optional: Pre-fill or logic based on props
-  }, [recommendedNonce]);
-
-  const getBalance = () => {
-    return balances[selectedAsset] || '0.00';
-  };
-
   const handleSend = async () => {
+    // 1. Block if address is invalid
+    if (recipientError || !recipient.trim()) {
+      return;
+    }
+
+    // 2. Check if we need to show the balance warning first
+    if (isInsufficient && !hasAcknowledgedBalance) {
+      setHasAcknowledgedBalance(true);
+      return;
+    }
+
     setTransferStatus('sending');
     setTxHash(undefined);
     setErrorMsg(undefined);
@@ -85,7 +148,8 @@ export const SendForm: React.FC<SendFormProps> = ({
       customData,
       gasPrice,
       gasLimit,
-      nonce: customNonce ? parseInt(customNonce) : undefined
+      nonce: customNonce ? parseInt(customNonce) : undefined,
+      bypassBalanceCheck: hasAcknowledgedBalance
     });
 
     if (result.success) {
@@ -101,19 +165,18 @@ export const SendForm: React.FC<SendFormProps> = ({
     }
   };
   
-  // If we are in any active transfer state, show the animation view
   if (transferStatus !== 'idle') {
     return (
-        <div className="max-w-md mx-auto animate-tech-in bg-white rounded-2xl shadow-lg border border-slate-100 min-h-[400px] flex items-center justify-center">
+        <div className="max-w-md mx-auto animate-tech-in bg-white/80 backdrop-blur-2xl rounded-[2rem] shadow-lg border border-white/40 min-h-[420px] flex items-center justify-center overflow-hidden">
             <TransferStateView 
                 status={transferStatus}
                 txHash={txHash}
                 error={errorMsg}
                 onClose={() => {
                    if (transferStatus === 'success' || transferStatus === 'timeout') {
-                      onBack(); // Go back to dashboard on finish
+                      onBack();
                    } else {
-                      setTransferStatus('idle'); // Go back to form on error
+                      setTransferStatus('idle');
                    }
                 }}
                 explorerUrl={txHash ? getExplorerLink(activeChain, txHash) : undefined}
@@ -133,22 +196,31 @@ export const SendForm: React.FC<SendFormProps> = ({
       </div>
 
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-lg space-y-6 relative">
-        {/* Decorative Top Line */}
-        <div className="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-indigo-500 to-pink-500 opacity-20"></div>
+        <div className="absolute top-0 left-6 right-6 h-0.5 bg-gradient-to-r from-[#0062ff] to-[#00d4ff] opacity-20"></div>
 
         <div className="space-y-4">
           
           {/* Asset Selection */}
-          <div className="animate-stagger-1">
-            <div className="flex justify-between mb-1">
-              <label className="text-xs font-bold text-slate-500 uppercase">Asset</label>
-              <span className="text-xs font-medium text-slate-400">
-                Balance: <span className="text-indigo-600">{parseFloat(getBalance()).toFixed(4)}</span>
-              </span>
+          <div>
+            <div className="flex justify-between items-end mb-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Asset</label>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-bold text-slate-400 uppercase">
+                  Available: <span className="text-[#0062ff]">{parseFloat(currentBalance).toFixed(4)}</span>
+                </span>
+                <button 
+                  onClick={() => onRefresh && onRefresh()} 
+                  className={`p-1 rounded-md hover:bg-slate-100 transition-all ${isLoading ? 'text-[#0062ff]' : 'text-slate-300'}`}
+                  title="Refresh balance"
+                  disabled={isLoading}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
             </div>
             <div className="relative">
               <select 
-                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all appearance-none font-medium text-slate-700"
+                className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-[#0062ff]/40 transition-all appearance-none font-bold text-slate-700"
                 value={selectedAsset} 
                 onChange={e => setSelectedAsset(e.target.value)}
               >
@@ -162,30 +234,46 @@ export const SendForm: React.FC<SendFormProps> = ({
           </div>
           
           {/* Recipient */}
-          <div className="animate-stagger-2">
-            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Recipient</label>
-            <input 
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all font-mono text-sm" 
-              placeholder={activeChain.chainType === 'TRON' ? "T..." : "0x..."} 
-              value={recipient} 
-              onChange={e => setRecipient(e.target.value)} 
-            />
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Recipient Address</label>
+              {recipientError && (
+                <span className="text-[10px] font-black text-red-500 uppercase italic animate-pulse tracking-tighter">
+                  {recipientError}
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <input 
+                className={`w-full px-4 py-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 transition-all font-mono text-sm shadow-inner outline-none ${
+                  recipientError ? 'border-red-300 ring-red-100 animate-shake' : 'border-slate-200 focus:ring-blue-100 focus:border-[#0062ff]/40'
+                }`} 
+                placeholder={activeChain.chainType === 'TRON' ? "T..." : "0x..."} 
+                value={recipient} 
+                onChange={e => setRecipient(e.target.value)} 
+              />
+              {recipientError && (
+                <div className="absolute right-3 top-3">
+                  <AlertCircle className="w-5 h-5 text-red-400" />
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Amount */}
-          <div className="animate-stagger-3">
-            <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Amount</label>
+          <div>
+            <label className="text-xs font-bold text-slate-500 uppercase block mb-1.5 tracking-wider">Transfer Amount</label>
             <div className="relative">
               <input 
-                className="w-full pl-4 pr-16 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all font-mono text-lg font-bold text-slate-800"
+                className={`w-full pl-4 pr-16 py-3 border rounded-xl transition-all font-mono text-lg font-bold shadow-inner ${isInsufficient ? 'bg-amber-50 border-amber-200 text-amber-700 focus:ring-amber-100' : 'bg-slate-50 border-slate-200 text-slate-800 focus:ring-blue-100 focus:border-[#0062ff]/40'}`}
                 placeholder="0.0" 
                 value={amount} 
                 onChange={e => setAmount(e.target.value)} 
               />
               <div className="absolute right-4 top-3.5">
                 <button 
-                  onClick={() => setAmount(getBalance())}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors"
+                  onClick={() => setAmount(currentBalance)}
+                  className="text-[10px] font-black text-[#0062ff] hover:text-[#0052d9] bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors uppercase tracking-widest border border-blue-100"
                 >
                   MAX
                 </button>
@@ -193,65 +281,45 @@ export const SendForm: React.FC<SendFormProps> = ({
             </div>
           </div>
 
-          {/* Advanced Toggle */}
-          {selectedAsset === 'NATIVE' && activeChain.chainType !== 'TRON' && (
-            <div className="pt-2 animate-stagger-3">
-              <button 
-                onClick={() => setIsAdvancedSend(!isAdvancedSend)} 
-                className="text-xs font-bold text-slate-400 hover:text-indigo-600 flex items-center transition-colors"
-              >
-                <Settings className={`w-3.5 h-3.5 mr-1.5 transition-transform duration-300 ${isAdvancedSend ? 'rotate-90 text-indigo-600' : ''}`} /> 
-                {isAdvancedSend ? 'Hide Advanced Options' : 'Show Advanced Options'}
-              </button>
-            </div>
-          )}
-
-          {/* Advanced Fields */}
-          {isAdvancedSend && selectedAsset === 'NATIVE' && activeChain.chainType !== 'TRON' && (
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4 animate-tech-in">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Gas Price (Gwei)</label>
-                  <input className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white" placeholder="Auto" value={gasPrice} onChange={e => setGasPrice(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Gas Limit</label>
-                  <input className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white" placeholder="Auto" value={gasLimit} onChange={e => setGasLimit(e.target.value)} />
-                </div>
-              </div>
-              
-              <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nonce</label>
-                  <input 
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-white" 
-                    placeholder={`Auto (${recommendedNonce})`} 
-                    value={customNonce} 
-                    type="number"
-                    onChange={e => setCustomNonce(e.target.value)} 
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Override to replace pending transactions.
-                  </p>
-              </div>
-
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Custom Data (Hex)</label>
-                <textarea 
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono bg-white" 
-                  rows={2} 
-                  placeholder="0x..." 
-                  value={customData} 
-                  onChange={e => setCustomData(e.target.value)} 
-                />
+          {/* Insufficient Balance Warning Banner */}
+          {isInsufficient && (
+            <div className={`p-4 rounded-xl border flex items-start gap-3 animate-tech-in ${hasAcknowledgedBalance ? 'bg-amber-100 border-amber-300 shadow-sm' : 'bg-amber-50 border-amber-200'}`}>
+              <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${hasAcknowledgedBalance ? 'text-amber-700' : 'text-amber-500'}`} />
+              <div className="space-y-1">
+                <p className="text-xs font-black uppercase text-amber-800 tracking-tight">Warning: Insufficient Liquidity</p>
+                <p className="text-[10px] text-amber-700 font-medium leading-relaxed italic">
+                  Your balance is {parseFloat(currentBalance).toFixed(4)} {selectedAsset === 'NATIVE' ? activeChain.currencySymbol : selectedAsset}. 
+                  The requested amount exceeds your holdings. Execution will likely fail on-chain.
+                </p>
               </div>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="pt-4 flex gap-4 animate-stagger-3">
-            <Button onClick={handleSend} className="w-full py-3 text-sm shadow-lg shadow-indigo-200 btn-tech-press" icon={activeAccountType === 'SAFE' ? undefined : <Zap className="w-4 h-4" />}>
-              {activeAccountType === 'SAFE' && activeChain.chainType !== 'TRON' ? 'Propose Transaction' : 'Confirm Send'}
+          <div className="pt-4 flex flex-col gap-3">
+            <Button 
+              onClick={handleSend} 
+              variant={hasAcknowledgedBalance ? 'danger' : (isInsufficient ? 'outline' : 'primary')}
+              className={`w-full py-4 text-sm font-black transition-all ${
+                (isInsufficient && !hasAcknowledgedBalance) ? 'border-amber-300 text-amber-600' : ''
+              }`} 
+              disabled={!!recipientError || !recipient.trim()}
+              icon={isInsufficient ? <AlertTriangle className="w-4 h-4" /> : (activeAccountType === 'SAFE' ? undefined : <Zap className="w-4 h-4" />)}
+            >
+              {isInsufficient 
+                ? (hasAcknowledgedBalance ? 'PROCEED_ANYWAY_SIG' : 'INSUFFICIENT_FUNDS') 
+                : (activeAccountType === 'SAFE' && activeChain.chainType !== 'TRON' ? 'PROPOSE_TX' : 'BROADCAST_TRANSACTION')
+              }
             </Button>
+            
+            {hasAcknowledgedBalance && (
+              <button 
+                onClick={() => setHasAcknowledgedBalance(false)}
+                className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hover:text-slate-600 transition-colors"
+              >
+                Cancel Override
+              </button>
+            )}
           </div>
         </div>
       </div>
