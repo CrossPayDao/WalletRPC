@@ -2,6 +2,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { BrandLogo } from './BrandLogo';
+import { useTranslation } from '../../contexts/LanguageContext';
 
 if (typeof window !== 'undefined' && !(window as any).THREE) {
   (window as any).THREE = THREE;
@@ -13,6 +14,7 @@ interface ParticleIntroProps {
 }
 
 export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOut = false }) => {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const requestRef = useRef<number>(0);
   const speedRef = useRef<number>(0.2);
@@ -148,15 +150,15 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOu
          </div>
 
          <div className="font-mono text-slate-400 text-[10px] md:text-xs mb-6 tracking-[0.4em] uppercase font-black opacity-60">
-            INITIALIZING_SECURE_CONTEXT
+            {t('intro.secure_context')}
          </div>
          
          <div className="space-y-4">
             <h1 className="text-2xl md:text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-tight">
-               The Times <span className="text-[#0062ff]">03/Jan/2009</span>
+               {t('intro.headline_date')}
             </h1>
             <p className="text-lg md:text-2xl font-bold text-slate-500 tracking-tight leading-relaxed max-w-2xl mx-auto italic">
-              "Chancellor on brink of second bailout for banks"
+              {t('intro.headline_text')}
             </p>
          </div>
 
@@ -167,7 +169,7 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOu
                 <div className="w-1.5 h-1.5 bg-[#0062ff] rounded-full animate-bounce shadow-[0_0_8px_#0062ff]" style={{ animationDelay: '0.3s' }}></div>
              </div>
              <div className="text-[9px] text-slate-300 uppercase tracking-[0.6em] font-black">
-                Awaiting_Consensus
+                {t('intro.awaiting')}
              </div>
          </div>
       </div>

@@ -88,7 +88,7 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
 
           <div className="flex justify-between items-start mb-6 relative z-10">
             <div>
-              <h3 className="text-[10px] font-black text-[#0062ff] uppercase tracking-[0.3em] mb-2">Total Net Worth</h3>
+              <h3 className="text-[10px] font-black text-[#0062ff] uppercase tracking-[0.3em] mb-2">{t('wallet.total_net_worth')}</h3>
               <div className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter flex items-baseline flex-wrap italic">
                 <CountUp 
                   value={balance} 
@@ -138,7 +138,7 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
             {activeAccountType === 'SAFE' && activeChain.chainType !== 'TRON' && (
               <>
                 <Button onClick={onViewQueue} variant="secondary" className="w-full h-12 font-black bg-slate-50 text-[#0062ff] border-[#0062ff]/10 hover:bg-blue-50">
-                  QUEUE {pendingTxCount > 0 && <span className="ml-2 bg-[#0062ff] text-white px-1.5 rounded-sm text-[9px]">{pendingTxCount}</span>}
+                  {t('safe.queue_title').toUpperCase()} {pendingTxCount > 0 && <span className="ml-2 bg-[#0062ff] text-white px-1.5 rounded-sm text-[9px]">{pendingTxCount}</span>}
                 </Button>
                 <Button onClick={onViewSettings} variant="outline" className="w-full h-12 font-black border-slate-200 text-slate-500 hover:text-slate-900">
                   SAFE_MOD
@@ -152,38 +152,38 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
       {/* Assets Section */}
       <div>
         <div className="flex justify-between items-center mb-4 px-1">
-          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Asset Inventory</h4>
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">{t('wallet.asset_inventory')}</h4>
           {activeChain.chainType !== 'TRON' && (
             <button 
               onClick={(e) => { e.stopPropagation(); onAddToken(); }} 
               className="text-[10px] font-black text-[#0062ff] flex items-center px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-blue-50 hover:border-[#0062ff]/30 transition-colors"
             >
-              <Plus className="w-3 h-3 mr-1.5" /> IMPORT_TOKEN
+              <Plus className="w-3 h-3 mr-1.5" /> {t('wallet.import_token')}
             </button>
           )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-          {tokens.map((t, idx) => (
+          {tokens.map((t_item, idx) => (
             <div 
-              key={t.address} 
-              onClick={() => t.isCustom && onEditToken(t)}
+              key={t_item.address} 
+              onClick={() => t_item.isCustom && onEditToken(t_item)}
               className="group flex justify-between items-center p-4 rounded-2xl bg-white border border-slate-200 hover:border-[#0062ff]/30 hover:shadow-lg transition-all cursor-pointer animate-tech-in shadow-sm"
               style={{ animationDelay: `${idx * 0.05}s` }}
             >
               <div className="flex items-center min-w-0">
                 <div className="w-12 h-12 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-sm font-black text-[#0062ff] mr-4 group-hover:scale-110 transition-transform">
-                  {t.symbol[0]}
+                  {t_item.symbol[0]}
                 </div>
                 <div className="min-w-0">
-                  <div className="font-black text-slate-900 text-base truncate group-hover:text-[#0062ff] transition-colors uppercase italic">{t.name}</div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t.symbol}</div>
+                  <div className="font-black text-slate-900 text-base truncate group-hover:text-[#0062ff] transition-colors uppercase italic">{t_item.name}</div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{t_item.symbol}</div>
                 </div>
               </div>
               <div className="text-right flex-shrink-0 ml-3">
                 <div className="font-mono font-bold text-lg text-slate-900 group-hover:text-[#0062ff] transition-colors">
-                  <CountUp value={tokenBalances[t.symbol] || '0'} decimals={4} className="tabular-nums" />
+                  <CountUp value={tokenBalances[t_item.symbol] || '0'} decimals={4} className="tabular-nums" />
                 </div>
-                {t.isCustom && <span className="inline-block px-2 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-400 mt-1 uppercase">Custom</span>}
+                {t_item.isCustom && <span className="inline-block px-2 py-0.5 rounded text-[8px] font-black bg-slate-100 text-slate-400 mt-1 uppercase">{t('wallet.custom')}</span>}
               </div>
             </div>
           ))}
@@ -193,7 +193,7 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
       {/* Transaction Log */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Operational Logs</h3>
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">{t('wallet.operational_logs')}</h3>
         </div>
         
         {transactions.length === 0 ? (
@@ -201,7 +201,7 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
              <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
                <Clock className="w-6 h-6 text-slate-300" />
              </div>
-             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">No operations logged</p>
+             <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{t('wallet.no_logs')}</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
