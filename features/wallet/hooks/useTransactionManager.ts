@@ -1,231 +1,145 @@
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { TronService } from '../../../services/tronService';
+import { TransactionRecord, ChainConfig } from '../types';
 import { FeeService } from '../../../services/feeService';
-import { handleTxError, normalizeHex } from '../utils';
-import { TransactionRecord, ChainConfig, TokenConfig } from '../types';
-import { SendFormData } from '../components/SendForm';
-import { ERC20_ABI } from '../config';
+import { handleTxError } from '../utils';
 
-interface UseTransactionManagerProps {
-  wallet: ethers.Wallet | ethers.HDNodeWallet | null;
-  tronPrivateKey: string | null;
-  activeAddress: string | null | undefined;
-  activeChain: ChainConfig;
-  activeChainTokens: TokenConfig[];
-  activeAccountType: 'EOA' | 'SAFE';
-  provider: ethers.JsonRpcProvider | null;
-  tokenBalances: Record<string, string>;
-  balance: string;
-  fetchData: () => void;
-  setNotification: (msg: string) => void;
-  setError: (msg: string | null) => void;
-  handleSafeProposal: (to: string, value: bigint, data: string, summary: string) => Promise<void>;
+// Exported for SendForm
+export interface ProcessResult {
+  success: boolean;
+  hash?: string;
+  error?: string;
+  isTimeout?: boolean;
 }
 
-export type ProcessResult = {
-    success: boolean;
-    hash?: string;
-    isTimeout?: boolean;
-    error?: string;
-};
-
+/**
+ * 【交易生命周期管理器】
+ * 目的：处理 Nonce 连续性、费用预估、交易广播以及收据轮询。
+ */
 export const useTransactionManager = ({
   wallet,
-  tronPrivateKey,
-  activeAddress,
-  activeChain,
-  activeChainTokens,
-  activeAccountType,
   provider,
-  tokenBalances,
-  balance,
+  activeChain,
+  activeChainId,
   fetchData,
-  setNotification,
   setError,
   handleSafeProposal
-}: UseTransactionManagerProps) => {
+}: any) => {
 
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+
+  /**
+   * 【核心优化：本地 Nonce 追踪 (Local Nonce Tracking)】
+   * 为什么：在高频发笔交易时，链上的 nonce 更新有延迟。
+   * 解决：在内存中维护 localNonceRef。发送一笔就自增，直到下一次 syncNonce 强制对齐。
+   * 好处：解决了“交易覆盖”和“nonce冲突”报错问题。
+   */
   const localNonceRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    if (transactions.length === 0) return;
-    const submittedTxs = transactions.filter(tx => tx.status === 'submitted' && tx.hash && tx.chainId === activeChain.id);
-    if (submittedTxs.length === 0) return;
-
-    const checkReceipts = async () => {
-        let needsUpdate = false;
-        const updatedList = [...transactions];
-        for (const tx of submittedTxs) {
-            try {
-                if (activeChain.chainType !== 'TRON' && tx.hash && provider) {
-                    const receipt = await provider.getTransactionReceipt(tx.hash);
-                    if (receipt && receipt.status !== null) {
-                        const index = updatedList.findIndex(t => t.id === tx.id);
-                        if (index !== -1) {
-                            updatedList[index] = {
-                                ...updatedList[index],
-                                status: receipt.status === 1 ? 'confirmed' : 'failed',
-                                error: receipt.status === 0 ? 'Transaction Reverted' : undefined
-                            };
-                            needsUpdate = true;
-                        }
-                    }
-                } else if (activeChain.chainType === 'TRON' && tx.hash) {
-                   const host = activeChain.defaultRpcUrl;
-                   const info = await TronService.getTransactionInfo(host, tx.hash);
-                   if (info && info.id) {
-                      const index = updatedList.findIndex(t => t.id === tx.id);
-                      if (index !== -1) {
-                         let isSuccess = info.receipt?.result === 'SUCCESS';
-                         updatedList[index] = {
-                            ...updatedList[index],
-                            status: isSuccess ? 'confirmed' : 'failed',
-                            error: isSuccess ? undefined : info.receipt?.result
-                         };
-                         needsUpdate = true;
-                      }
-                   }
-                }
-            } catch (e) { console.warn(e); }
-        }
-        if (needsUpdate) { setTransactions(updatedList); fetchData(); }
-    };
-    const timer = setInterval(checkReceipts, 3000);
-    return () => clearInterval(timer);
-  }, [provider, transactions, activeChain]);
-
-  const syncNonce = async () => {
-    if (!wallet || !activeAddress || !provider) return;
+  /**
+   * 同步 Nonce
+   */
+  const syncNonce = useCallback(async () => {
+    if (!wallet || !provider || activeChain.chainType === 'TRON') return;
     try {
-       const nonce = await provider.getTransactionCount(activeAddress);
-       if (localNonceRef.current === null || localNonceRef.current < nonce) {
-          localNonceRef.current = nonce;
-       }
-    } catch (e) { console.warn(e); }
-  };
-
-  const processTransaction = async (txRequest: ethers.TransactionRequest, id: string): Promise<ProcessResult> => {
-     if (!wallet || !provider) return { success: false, error: "Provider invalid" };
-     try {
-        const connectedWallet = wallet.connect(provider);
-        
-        // 1. Nonce
-        if (txRequest.nonce === undefined || txRequest.nonce === null) {
-            if (localNonceRef.current !== null) {
-                txRequest.nonce = localNonceRef.current++;
-            } else {
-                const fetchedNonce = await provider.getTransactionCount(wallet.address);
-                txRequest.nonce = fetchedNonce;
-                localNonceRef.current = fetchedNonce + 1;
-            }
-        }
-
-        // 2. Fees & Overrides (Shared logic)
-        const feeData = await FeeService.getOptimizedFeeData(provider, activeChain.id);
-        
-        // 3. Estimate/Apply Gas Limit
-        let gasLimit = txRequest.gasLimit;
-        if (!gasLimit) {
-            const isERC20 = txRequest.data && (txRequest.data as string).startsWith('0xa9059cbb');
-            const isSafeExec = txRequest.data && (txRequest.data as string).startsWith('0x6a76128f');
-
-            if (isSafeExec && activeChain.gasLimits?.safeExec) {
-                gasLimit = BigInt(activeChain.gasLimits.safeExec);
-            } else if (isERC20 && activeChain.gasLimits?.erc20Transfer) {
-                gasLimit = BigInt(activeChain.gasLimits.erc20Transfer);
-            } else if (!txRequest.data || txRequest.data === '0x') {
-                gasLimit = BigInt(activeChain.gasLimits?.nativeTransfer || 100000);
-            } else {
-                try {
-                    const estimated = await provider.estimateGas(txRequest);
-                    gasLimit = (estimated * 150n) / 100n;
-                } catch {
-                    gasLimit = BigInt(800000);
-                }
-            }
-        }
-
-        const overrides = FeeService.buildOverrides(feeData, gasLimit);
-        const finalTx = { ...txRequest, ...overrides };
-
-        setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'submitted' } : t));
-        const txResponse = await connectedWallet.sendTransaction(finalTx);
-        setTransactions(prev => prev.map(t => t.id === id ? { ...t, hash: txResponse.hash } : t));
-        
-        const result = await Promise.race([
-            txResponse.wait(),
-            new Promise<'TIMEOUT'>(r => setTimeout(() => r('TIMEOUT'), 6000))
-        ]);
-
-        if (result === 'TIMEOUT') {
-             setNotification(`交易已广播: ${txResponse.hash.slice(0,8)}...`);
-             return { success: true, hash: txResponse.hash, isTimeout: true };
-        } else {
-             setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'confirmed' } : t));
-             fetchData();
-             return { success: true, hash: txResponse.hash, isTimeout: false };
-        }
-     } catch (e: any) {
-        const errMsg = handleTxError(e);
-        setTransactions(prev => prev.map(t => t.id === id ? { ...t, status: 'failed', error: errMsg } : t));
-        localNonceRef.current = null;
-        return { success: false, error: errMsg };
-     }
-  };
-
-  const handleSendSubmit = async (formData: SendFormData): Promise<ProcessResult> => {
-    if (!wallet || !activeAddress) return { success: false, error: "Wallet not ready" };
-    setError(null);
-    const { recipient, amount, asset, customData, gasPrice, gasLimit, nonce, bypassBalanceCheck = false } = formData;
-    const safeAmount = amount || '0';
-    const txId = Date.now().toString();
-
-    if (activeChain.chainType === 'TRON') {
-        const pk = tronPrivateKey || wallet.privateKey;
-        const host = activeChain.defaultRpcUrl;
-        setTransactions(prev => [{ id: txId, chainId: activeChain.id, status: 'queued', timestamp: Date.now(), summary: `转账 ${safeAmount} ${asset}` }, ...prev]);
-        try {
-            let hash;
-            if (asset === 'NATIVE') {
-                hash = await TronService.sendTrx(host, pk, recipient, Math.floor(parseFloat(safeAmount) * 1_000_000));
-            } else {
-                const token = activeChainTokens.find(t => t.symbol === asset);
-                hash = await TronService.sendTrc20(host, pk, recipient, ethers.parseUnits(safeAmount, token?.decimals || 6).toString(), token!.address);
-            }
-            setTransactions(prev => prev.map(t => t.id === txId ? { ...t, hash, status: 'submitted' } : t));
-            return { success: true, hash, isTimeout: true };
-        } catch (e: any) {
-            setTransactions(prev => prev.map(t => t.id === txId ? { ...t, status: 'failed', error: e.message } : t));
-            return { success: false, error: e.message };
-        }
+      const n = await provider.getTransactionCount(wallet.address);
+      localNonceRef.current = n;
+    } catch (e) {
+      console.error("Nonce sync failed", e);
     }
+  }, [wallet, provider, activeChain]);
 
+  /**
+   * 【逻辑：收据轮询器 (Receipt Polling)】
+   * 目的：自动将 'submitted' 状态的交易更新为 'confirmed' 或 'failed'。
+   * 协作：一旦确认，调用外部传入的 fetchData() 刷新全局余额。
+   */
+  useEffect(() => {
+    if (!provider || transactions.length === 0) return;
+    
+    const interval = setInterval(async () => {
+      const pending = transactions.filter(t => t.status === 'submitted');
+      if (pending.length === 0) return;
+
+      for (const tx of pending) {
+        if (!tx.hash) continue;
+        try {
+          const receipt = await provider.getTransactionReceipt(tx.hash);
+          if (receipt) {
+            setTransactions(prev => prev.map(t => 
+              t.id === tx.id ? { ...t, status: receipt.status === 1 ? 'confirmed' : 'failed' } : t
+            ));
+            if (receipt.status === 1) fetchData();
+          }
+        } catch (e) {
+          console.error("Receipt check failed", e);
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [provider, transactions, activeChain, fetchData]);
+
+  /**
+   * 【逻辑：交易处理管道 (Transaction Pipeline)】
+   */
+  const handleSendSubmit = async (data: any): Promise<ProcessResult> => {
     try {
-      let txRequest: ethers.TransactionRequest = {};
-      let toAddr = recipient;
-      let value = ethers.parseEther(safeAmount);
-      let data = customData ? normalizeHex(customData) : '0x';
+      if (!wallet || !provider) throw new Error("Wallet/Provider not ready");
 
-      if (asset !== 'NATIVE') {
-         const token = activeChainTokens.find(t => t.symbol === asset);
-         toAddr = token!.address;
-         value = 0n;
-         data = new ethers.Interface(ERC20_ABI).encodeFunctionData("transfer", [recipient, ethers.parseUnits(safeAmount, token!.decimals)]);
+      // Handle Safe Proposal if in SAFE mode
+      if (data.activeAccountType === 'SAFE') {
+        if (!handleSafeProposal) throw new Error("Safe manager not initialized");
+        const amountWei = ethers.parseEther(data.amount || "0");
+        const success = await handleSafeProposal(data.recipient, amountWei, data.customData || "0x", `Send ${data.amount} ${data.asset}`);
+        return { success };
       }
 
-      if (activeAccountType === 'EOA') {
-        txRequest = { to: toAddr, value, data, gasLimit: gasLimit ? BigInt(gasLimit) : undefined, nonce };
-        setTransactions(prev => [{ id: txId, chainId: activeChain.id, status: 'queued', timestamp: Date.now(), summary: `转账 ${safeAmount} ${asset}` }, ...prev]);
-        return await processTransaction(txRequest, txId);
-      } else {
-        await handleSafeProposal(toAddr, value, data, `转账 ${safeAmount} ${asset}`);
-        return { success: true, isTimeout: true, hash: "SAFE_PROPOSAL" };
+      // EOA Send
+      const amountWei = ethers.parseEther(data.amount || "0");
+      const txRequest: ethers.TransactionRequest = {
+        to: data.recipient,
+        value: amountWei,
+        data: data.customData || "0x"
+      };
+
+      const feeData = await FeeService.getOptimizedFeeData(provider, activeChainId);
+      const overrides = FeeService.buildOverrides(feeData);
+      
+      if (localNonceRef.current !== null) {
+        overrides.nonce = localNonceRef.current;
       }
-    } catch (e: any) { return { success: false, error: handleTxError(e) }; }
+
+      const connectedWallet = wallet.connect(provider);
+      const tx = await connectedWallet.sendTransaction({ ...txRequest, ...overrides });
+      
+      if (localNonceRef.current !== null) localNonceRef.current++;
+
+      const id = Date.now().toString();
+      setTransactions(prev => [{
+        id,
+        chainId: activeChainId,
+        hash: tx.hash,
+        status: 'submitted',
+        timestamp: Date.now(),
+        summary: `Send ${data.amount} ${activeChain.currencySymbol}`
+      }, ...prev]);
+
+      return { success: true, hash: tx.hash };
+    } catch (e: any) {
+      const error = handleTxError(e);
+      setError(error);
+      return { success: false, error };
+    }
   };
 
-  return { transactions, localNonceRef, syncNonce, handleSendSubmit, addTransactionRecord: (r: any) => setTransactions(p => [r, ...p]) };
+  /**
+   * 添加交易记录
+   */
+  const addTransactionRecord = (record: TransactionRecord) => {
+    setTransactions(prev => [record, ...prev]);
+  };
+
+  return { transactions, localNonceRef, handleSendSubmit, syncNonce, addTransactionRecord };
 };

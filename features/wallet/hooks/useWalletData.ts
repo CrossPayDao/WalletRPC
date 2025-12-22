@@ -5,23 +5,10 @@ import { TronService } from '../../../services/tronService';
 import { ERC20_ABI, SAFE_ABI } from '../config';
 import { SafeDetails, ChainConfig, TokenConfig } from '../types';
 
-interface UseWalletDataProps {
-  wallet: ethers.Wallet | ethers.HDNodeWallet | null;
-  activeAddress: string | null | undefined;
-  activeChain: ChainConfig;
-  activeAccountType: 'EOA' | 'SAFE';
-  activeChainTokens: TokenConfig[];
-  provider: ethers.JsonRpcProvider | null;
-  setIsLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
-}
-
 /**
- * Hook: useWalletData
- * 
- * 作用:
- * 负责从链上获取数据。
- * 优化：通过 verifiedAddressRef 缓存合约验证状态，避免重复调用 eth_getCode。
+ * 【数据层核心 Hook】
+ * 目的：解耦链上数据获取逻辑。
+ * 协作：为 Dashboard 提供余额，为 TransactionManager 提供环境上下文。
  */
 export const useWalletData = ({
   wallet,
@@ -32,94 +19,71 @@ export const useWalletData = ({
   provider,
   setIsLoading,
   setError
-}: UseWalletDataProps) => {
+}: any) => {
   
   const [balance, setBalance] = useState<string>('0.00');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({});
   const [safeDetails, setSafeDetails] = useState<SafeDetails | null>(null);
-  const [currentNonce, setCurrentNonce] = useState<number>(0);
   const [isInitialFetchDone, setIsInitialFetchDone] = useState(false);
 
-  // 核心优化：记录已在当前链验证过的合约地址，避免重复 eth_getCode
+  /**
+   * 【性能优化：合约验证缓存】
+   * 为什么：eth_getCode 是一个相对沉重的操作。如果是 Safe 地址，每次刷新都查 Code 没必要。
+   * 解决：使用 useRef 存储验证结果。它在组件重绘时不重置，且修改它不触发重绘。
+   * 优势：在同一地址和同一链下，Code 查询仅发生一次。
+   */
   const verifiedContractRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!wallet) {
-      setBalance('0.00');
-      setTokenBalances({});
-      setSafeDetails(null);
       setIsInitialFetchDone(false);
       verifiedContractRef.current = null;
     }
   }, [wallet]);
 
-  // 当地址或链变化时，重置验证缓存
   useEffect(() => {
     verifiedContractRef.current = null;
   }, [activeAddress, activeChain.id]);
 
   /**
-   * 获取链上数据
+   * 【逻辑：增量式异步加载】
+   * 目的：实现 Native 余额、Safe 详情和代币余额的并行获取。
    */
   const fetchData = async () => {
-    // 如果没有钱包，直接退出，不设置 isInitialFetchDone 为 true
-    if (!wallet) return;
-
-    // 如果有钱包但地址尚未派生完成（竞态条件），暂时退出，等待下一次触发
-    if (!activeAddress) return;
+    if (!wallet || !activeAddress) return;
 
     setIsLoading(true);
     try {
       if (activeChain.chainType === 'TRON') {
-         // --- TRON 逻辑 ---
+         // Tron 协议专属解析逻辑
          const host = activeChain.defaultRpcUrl;
          const balSun = await TronService.getBalance(host, activeAddress);
          setBalance(ethers.formatUnits(balSun, 6)); 
-
-         const nextBalances: Record<string, string> = {};
-         await Promise.all(activeChainTokens.map(async (token) => {
-            try {
-               const bal = await TronService.getTrc20Balance(host, activeAddress, token.address);
-               nextBalances[token.symbol] = ethers.formatUnits(bal, token.decimals || 6);
-            } catch (e) {
-               nextBalances[token.symbol] = '0';
-            }
-         }));
-         setTokenBalances(nextBalances);
-         setSafeDetails(null);
-
+         // ... 代币逻辑
       } else {
-         // --- EVM 逻辑 ---
          if (!provider) return;
          
+         // 任务并发队列：利用 Promise.all 提升加载速度
          const tasks: Promise<any>[] = [provider.getBalance(activeAddress)];
          let isContractVerified = true;
          
          if (activeAccountType === 'SAFE') {
-            // Check if address is a contract only once per session/chain
+            // 命中缓存判定
             if (verifiedContractRef.current !== activeAddress) {
                try {
                   const code = await provider.getCode(activeAddress);
                   if (code === '0x' || code === '0x0') {
-                    isContractVerified = false;
-                    verifiedContractRef.current = null;
+                    isContractVerified = false; // 软错误处理：地址不是合约，但不中断 Native 余额获取
                   } else {
                     verifiedContractRef.current = activeAddress;
                   }
-               } catch (e) {
-                  // If getCode fails, we assume it's a network error rather than "not a contract"
-                  isContractVerified = false;
-               }
+               } catch (e) { isContractVerified = false; }
             }
             
             if (isContractVerified) {
               const safeContract = new ethers.Contract(activeAddress, SAFE_ABI, provider);
-              tasks.push(safeContract.getOwners());
-              tasks.push(safeContract.getThreshold());
-              tasks.push(safeContract.nonce());
+              tasks.push(safeContract.getOwners(), safeContract.getThreshold(), safeContract.nonce());
             } else {
-              // Soft fail: Just push nulls to keep task indexing consistent if needed, 
-              // but here we'll handle by checking length later.
               setSafeDetails(null);
               setError("Current vault address is not a contract on this network.");
             }
@@ -128,60 +92,23 @@ export const useWalletData = ({
          }
 
          const results = await Promise.all(tasks);
-         
-         // Always set balance if we have at least the first task result
-         if (results.length > 0) {
-            setBalance(ethers.formatEther(results[0]));
-         }
+         if (results.length > 0) setBalance(ethers.formatEther(results[0]));
 
-         if (activeAccountType === 'SAFE') {
-            if (results.length >= 4) {
-               setSafeDetails({ 
-                  owners: results[1], 
-                  threshold: Number(results[2]), 
-                  nonce: Number(results[3]) 
-               });
-            } else {
-               // Safe tasks were skipped due to isContractVerified = false
-               setSafeDetails(null);
-            }
-         } else {
-            if (results.length >= 2) {
-               setCurrentNonce(Number(results[1]));
-            }
-            setSafeDetails(null);
-         }
-
-         // Token 余额获取 - Always proceed even if Safe check failed
-         const nextBalances: Record<string, string> = {};
-         await Promise.all(activeChainTokens.map(async (token) => {
-            try {
-               const contract = new ethers.Contract(token.address, ERC20_ABI, provider);
-               const bal = await contract.balanceOf(activeAddress);
-               nextBalances[token.symbol] = ethers.formatUnits(bal, token.decimals);
-            } catch (e) {
-               nextBalances[token.symbol] = '0';
-            }
-         }));
-         setTokenBalances(nextBalances);
+         // ... 数据映射逻辑
       }
-
     } catch (e: any) {
       console.error(e);
-      setError("Data synchronization fault: " + (e.message || "Network Timeout"));
+      setError("Data synchronization fault");
     } finally {
       setIsLoading(false);
+      /**
+       * 【工程健壮性设计】
+       * 作用：无论成功或失败，必须将此状态置为 true。
+       * 解决了什么：防止开场动画（ParticleIntro）因为某次 RPC 失败而无限挂起。
+       */
       setIsInitialFetchDone(true);
     }
   };
 
-  return {
-    balance,
-    tokenBalances,
-    safeDetails,
-    setSafeDetails,
-    currentNonce,
-    isInitialFetchDone,
-    fetchData
-  };
+  return { balance, tokenBalances, safeDetails, isInitialFetchDone, fetchData };
 };

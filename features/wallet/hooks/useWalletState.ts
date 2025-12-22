@@ -4,148 +4,93 @@ import { ethers } from 'ethers';
 import { TronService } from '../../../services/tronService';
 import { TokenConfig } from '../types';
 
-export interface ErrorState {
-  message: string;
-  timestamp: number;
-}
-
 /**
- * Hook: useWalletState
- * 
- * 作用:
- * 管理钱包的基础状态和 UI 视图状态。
- * 包括：钱包实例、当前账户模式、视图路由、加载/错误状态、弹窗控制等。
+ * 【架构设计：原子化 UI 状态机】
+ * 目的：管理钱包的非持久化即时状态。
+ * 背景：处理私钥导入、视图切换（路由）和弹窗控制。
+ * 协作：作为 useEvmWallet 的基础，为数据层 and 交易层提供 Wallet 实例。
  */
 export const useWalletState = (initialChainId: number) => {
-  // --- 钱包实例状态 ---
-  
-  /** 当前 EOA 钱包 (ethers.js 实例) - 仅内存存储 */
+  // 核心钱包实例 (仅内存存储，安全设计：刷新即销毁)
   const [wallet, setWallet] = useState<ethers.Wallet | ethers.HDNodeWallet | null>(null);
-  
-  /** 派生的 Tron 地址 */
   const [tronWalletAddress, setTronWalletAddress] = useState<string | null>(null);
-
-  /** 独立的 Tron 私钥 (因为助记词派生路径不同) */
   const [tronPrivateKey, setTronPrivateKey] = useState<string | null>(null);
 
-  /** 当前账户模式: 'EOA' (个人) 或 'SAFE' (多签) */
+  // 账户与网络路由状态
   const [activeAccountType, setActiveAccountType] = useState<'EOA' | 'SAFE'>('EOA');
-  
-  /** 当前选中的 Safe 地址 */
   const [activeSafeAddress, setActiveSafeAddress] = useState<string | null>(null);
-  
-  /** 当前选中的链 ID */
   const [activeChainId, setActiveChainId] = useState<number>(initialChainId);
 
-  // --- UI/视图状态 ---
-
-  /** 当前主视图 
-   * intro_animation: 导入成功后的粒子动画过场
-   */
+  // UI 表现层状态
   const [view, setView] = useState<'onboarding' | 'intro_animation' | 'dashboard' | 'send' | 'create_safe' | 'add_safe' | 'safe_queue' | 'settings'>('onboarding');
-  
-  /** 导入输入框的值 */
   const [privateKeyOrPhrase, setPrivateKeyOrPhrase] = useState('');
-  
-  /** 账户切换菜单 */
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
-  /** 全局加载指示器 */
   const [isLoading, setIsLoading] = useState(false);
-  
-  /** 全局错误信息对象 (支持重复触发) */
-  const [errorObject, setErrorObject] = useState<ErrorState | null>(null);
-  
-  /** 全局通知信息 */
+  const [errorObject, setErrorObject] = useState<any>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // --- 模态框状态 ---
-  
+  // UI 弹窗与交互状态
   const [tokenToEdit, setTokenToEdit] = useState<TokenConfig | null>(null);
   const [isChainModalOpen, setIsChainModalOpen] = useState(false);
   const [isAddTokenModalOpen, setIsAddTokenModalOpen] = useState(false);
-  const [isAddingToken, setIsAddingToken] = useState(false);
-
-  // Helper to set error
-  const setError = (msg: string | null) => {
-    if (!msg) {
-      setErrorObject(null);
-    } else {
-      // Always update timestamp to reset timer even if message is same
-      setErrorObject({ message: msg, timestamp: Date.now() });
-    }
-  };
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   /**
-   * 处理钱包导入
-   * 解析私钥或助记词，并同时生成 EVM 和 Tron 地址。
-   * @returns Promise<boolean> 导入是否成功
+   * 【性能与安全：异构链地址派生逻辑】
+   * 为什么：Tron 和 EVM 虽使用相同的椭圆曲线，但标准派生路径不同。
+   * 背景：
+   * - EVM 标准: m/44'/60'/0'/0/0
+   * - Tron 标准: m/44'/195'/0'/0/0
+   * 解决：在 handleImport 中，如果检测到助记词，分别按两条路径派生，确保生成的地址与 TronLink/MetaMask 一致。
    */
   const handleImport = async (): Promise<boolean> => {
-    setError(null);
+    setErrorObject(null);
     try {
       const input = privateKeyOrPhrase.trim();
       let newWallet: ethers.Wallet | ethers.HDNodeWallet;
-      let newTronPrivateKey: string;
-      let derivedTronAddr: string | null = null;
+      let newTronPK: string;
 
       if (input.includes(' ')) {
-        // 1. EVM Wallet (Default Path: m/44'/60'/0'/0/0)
-        newWallet = ethers.Wallet.fromPhrase(input);
+        // 助记词：多路径派生
+        newWallet = ethers.Wallet.fromPhrase(input); // 默认 60'
         
-        // 2. Tron Wallet (Tron Path: m/44'/195'/0'/0/0)
-        // 必须使用特定的派生路径，否则地址会与 TronLink 等不一致
         const mnemonic = ethers.Mnemonic.fromPhrase(input);
         const tronNode = ethers.HDNodeWallet.fromMnemonic(mnemonic, "m/44'/195'/0'/0/0");
-        newTronPrivateKey = tronNode.privateKey;
-
+        newTronPK = tronNode.privateKey;
       } else {
-        // 私钥导入：两链使用相同私钥
+        // 私钥：直接映射
         const pk = input.startsWith('0x') ? input : '0x' + input;
         newWallet = new ethers.Wallet(pk);
-        newTronPrivateKey = pk;
+        newTronPK = pk;
       }
       
-      try {
-         const pk = newTronPrivateKey.startsWith('0x') ? newTronPrivateKey : '0x' + newTronPrivateKey;
-         derivedTronAddr = TronService.addressFromPrivateKey(pk);
-      } catch (e) {
-         console.warn("无法派生 Tron 地址", e);
-      }
+      const derivedTronAddr = TronService.addressFromPrivateKey(newTronPK);
 
       setWallet(newWallet);
-      setTronPrivateKey(newTronPrivateKey);
+      setTronPrivateKey(newTronPK);
       setTronWalletAddress(derivedTronAddr);
       
-      // 注意：这里不再直接 setView('intro_animation')
-      // 而是返回 true，让 UI 层控制动画时机
       return true;
     } catch (e) {
-      console.error(e);
-      setError("无效的私钥或助记词");
+      setErrorObject({ message: "Invalid Key/Mnemonic", timestamp: Date.now() });
       return false;
     }
   };
 
+  const setError = (msg: string | null) => {
+    setErrorObject(msg ? { message: msg, timestamp: Date.now() } : null);
+  };
+
   return {
-    wallet, setWallet,
-    tronWalletAddress,
-    tronPrivateKey, // Export Tron Private Key
-    activeAccountType, setActiveAccountType,
-    activeSafeAddress, setActiveSafeAddress,
-    activeChainId, setActiveChainId,
-    view, setView,
-    privateKeyOrPhrase, setPrivateKeyOrPhrase,
-    isMenuOpen, setIsMenuOpen,
-    isLoading, setIsLoading,
-    error: errorObject?.message || null, 
-    errorObject, // Export object for dependency checking
-    setError,
-    notification, setNotification,
+    wallet, setWallet, tronWalletAddress, tronPrivateKey,
+    activeAccountType, setActiveAccountType, activeSafeAddress, setActiveSafeAddress,
+    activeChainId, setActiveChainId, view, setView,
+    privateKeyOrPhrase, setPrivateKeyOrPhrase, isLoading, setIsLoading,
+    error: errorObject?.message || null, errorObject, setError,
+    notification, setNotification, handleImport,
+    // 返回缺失的 UI 状态
     tokenToEdit, setTokenToEdit,
     isChainModalOpen, setIsChainModalOpen,
     isAddTokenModalOpen, setIsAddTokenModalOpen,
-    isAddingToken, setIsAddingToken,
-    handleImport
+    isMenuOpen, setIsMenuOpen
   };
 };
