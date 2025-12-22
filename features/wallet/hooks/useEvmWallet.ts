@@ -66,7 +66,6 @@ export const useEvmWallet = () => {
   });
 
   // 4. 交易与 Safe 管理 (使用 Ref 解决循环依赖: TxMgr <-> SafeMgr)
-  // Fix: Type mismatch for safeHandlerRef - updating signature to match useSafeManager's handleSafeProposal
   const safeHandlerRef = useRef<(to: string, value: bigint, data: string, summary?: string) => Promise<boolean>>(async () => false);
   
   const txMgr = useTransactionManager({
@@ -82,7 +81,6 @@ export const useEvmWallet = () => {
     fetchData: dataLayer.fetchData,
     setNotification,
     setError,
-    // Fix: Explicitly return Promise<void> to satisfy useTransactionManager's prop type
     handleSafeProposal: async (t, v, d, s) => { await safeHandlerRef.current(t, v, d, s); }
   });
 
@@ -108,6 +106,7 @@ export const useEvmWallet = () => {
     safeHandlerRef.current = safeMgr.handleSafeProposal;
   }, [safeMgr.handleSafeProposal]);
 
+  // 优化：只有当核心上下文（链、账户类型、地址）变化时才重置 Safe 状态
   useEffect(() => {
     if (activeAccountType === 'SAFE') {
        const isSafeValidOnChain = trackedSafes.some(
@@ -124,12 +123,19 @@ export const useEvmWallet = () => {
           setNotification("已切换回个人钱包 (该 Safe 不在当前网络)");
        }
     }
-  }, [activeChainId, activeChain, activeAccountType, activeSafeAddress, trackedSafes, state.setActiveAccountType, setView]);
+  }, [activeChainId, activeChain, activeAccountType, activeSafeAddress, trackedSafes]);
 
+  // 优化：切链时重置 Nonce 缓存，但不在此处发起新请求
   useEffect(() => {
     txMgr.localNonceRef.current = null;
   }, [activeChainId]);
 
+  /**
+   * 核心数据同步逻辑
+   * 优化点：去除了 [view] 依赖。
+   * 行为：仅在初始化、切换钱包、切换网络或代币列表变更时执行全量同步。
+   * 在 Dashboard、Settings 间切换不再触发任何 RPC。
+   */
   useEffect(() => {
     if (wallet && view !== 'onboarding') {
       dataLayer.fetchData();
@@ -137,7 +143,8 @@ export const useEvmWallet = () => {
         txMgr.syncNonce();
       }
     }
-  }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChainTokens]);
+    // 明确移除 view 依赖，实现导航零 RPC 开销
+  }, [activeChainId, activeAccountType, activeSafeAddress, wallet, activeChainTokens]);
 
   const confirmAddToken = async (address: string) => {
      if (activeChain.chainType === 'TRON') {
@@ -150,7 +157,6 @@ export const useEvmWallet = () => {
      try {
         if (!provider) throw new Error("Provider 未初始化");
         
-        // Fix: Check for contract code before calling symbol/decimals
         const code = await provider.getCode(address);
         if (code === '0x' || code === '0x0') {
            throw new Error("NOT_A_CONTRACT");
@@ -209,7 +215,6 @@ export const useEvmWallet = () => {
       const trimmed = address.trim();
       setError(null);
 
-      // 1. Initial Granular Validation
       if (!trimmed) {
           setError(t("safe.error_empty"));
           return;
@@ -234,13 +239,11 @@ export const useEvmWallet = () => {
 
       setIsLoading(true);
       try {
-          // 2. On-chain validation
           const code = await provider.getCode(trimmed);
           if (code === '0x') {
               throw new Error("NOT_A_CONTRACT");
           }
 
-          // 3. Success -> Add to watchlist
           setTrackedSafes(prev => [...prev, { 
               address: trimmed, 
               name: `Safe ${trimmed.slice(0,4)}`, 
