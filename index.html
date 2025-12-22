@@ -5,86 +5,88 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
+    <!-- Resource Pre-connectivity for high-latency networks -->
+    <link rel="preconnect" href="https://esm.sh" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://esm.sh" />
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
+
     <!-- SEO Primary Tags -->
     <title>CPcash Wallet RPC | High-performance Multisig & EOA Wallet</title>
-    <meta name="description" content="CPcash Wallet RPC is an advanced, high-performance web-based wallet for EVM and TRON networks. Securely manage multisig vaults and personal accounts with lightning-fast RPC connectivity." />
-    <meta name="keywords" content="CPcash, Wallet RPC, Crypto Wallet, Multisig Wallet, Gnosis Safe, TRON Wallet, EVM Wallet, Blockchain Management, Web3 RPC" />
-    <meta name="author" content="CPcash Team" />
-    <meta name="robots" content="index, follow" />
+    <meta name="description" content="Advanced high-performance web-based wallet for EVM and TRON networks. Securely manage multisig vaults with lightning-fast RPC connectivity." />
 
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://rpc.cpcash.io/" />
-    <meta property="og:title" content="CPcash Wallet RPC - High-performance Web3 Control" />
-    <meta property="og:description" content="The most responsive web-based multisig and EOA wallet. Secure local decryption, global RPC node sync, and native Safe support." />
-    <meta property="og:image" content="https://rpc.cpcash.io/og-image.png" />
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="https://rpc.cpcash.io/" />
-    <meta property="twitter:title" content="CPcash Wallet RPC" />
-    <meta property="twitter:description" content="Advanced RPC wallet for professional blockchain operations. High-speed, secure, and decentralized." />
-    <meta property="twitter:image" content="https://rpc.cpcash.io/og-image.png" />
-
-    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Critical CSS (Inlined for instant rendering) -->
     <style>
       :root {
-        --bg-deep: #f8fafc;
-        --primary-accent: #0062ff;
-        --font-sans: 'Inter', sans-serif;
+        --bg-splash: #f8fafc;
+        --brand-blue: #0062ff;
+        --text-muted: #94a3b8;
       }
 
-      body {
+      html, body {
         margin: 0;
         padding: 0;
-        background-color: var(--bg-deep);
-        font-family: var(--font-sans);
+        width: 100%;
+        height: 100%;
+        background-color: var(--bg-splash);
         overflow: hidden;
       }
 
-      /* Splash Screen Animations - Native CSS Only */
-      @keyframes splash-pulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(0.92); opacity: 0.6; }
+      /* Native CSS Animations (Hardware Accelerated) */
+      @keyframes logo-pulse {
+        0%, 100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0px rgba(0,98,255,0)); }
+        50% { transform: scale(0.94); opacity: 0.7; filter: drop-shadow(0 0 15px rgba(0,98,255,0.1)); }
       }
 
-      @keyframes splash-loader {
+      @keyframes scanner-line {
         0% { transform: translateX(-100%); }
-        100% { transform: translateX(400%); }
+        100% { transform: translateX(350%); }
       }
 
-      .splash-container {
+      @keyframes text-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .splash-screen {
         position: fixed;
         inset: 0;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background: var(--bg-deep);
-        z-index: 9999;
+        z-index: 99999;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
 
-      .splash-logo {
-        width: 72px;
-        height: 72px;
-        margin-bottom: 32px;
-        animation: splash-pulse 2s ease-in-out infinite;
+      .logo-box {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 40px;
+        animation: logo-pulse 2.5s ease-in-out infinite;
+        will-change: transform, opacity;
       }
 
-      .splash-text {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 9px;
+      .status-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .status-text {
+        font-family: 'JetBrains Mono', 'Courier New', monospace;
+        font-size: 10px;
         font-weight: 700;
-        color: #94a3b8;
+        color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.6em;
-        margin-bottom: 20px;
-        text-indent: 0.6em; /* Center text with letter spacing */
+        text-indent: 0.6em;
+        animation: text-blink 2s ease-in-out infinite;
       }
 
-      .splash-progress-track {
-        width: 140px;
+      .progress-track {
+        width: 160px;
         height: 1px;
         background: rgba(0, 98, 255, 0.08);
         position: relative;
@@ -92,28 +94,21 @@
         border-radius: 1px;
       }
 
-      .splash-progress-bar {
+      .progress-bar {
         position: absolute;
         top: 0;
         left: 0;
-        width: 35px;
+        width: 40px;
         height: 100%;
-        background: var(--primary-accent);
-        animation: splash-loader 1.2s infinite cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      /* Base App Utility Classes */
-      .bg-tech-diamond {
-        background-image: 
-          linear-gradient(45deg, var(--primary-accent) 0.5px, transparent 0.5px), 
-          linear-gradient(-45deg, var(--primary-accent) 0.5px, transparent 0.5px);
-        background-size: 24px 24px;
-      }
-      .bg-tech-dots {
-        background-image: radial-gradient(var(--primary-accent) 0.5px, transparent 0.5px);
-        background-size: 20px 20px;
+        background: var(--brand-blue);
+        box-shadow: 0 0 10px var(--brand-blue);
+        animation: scanner-line 1.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+        will-change: transform;
       }
     </style>
+
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script type="importmap">
 {
   "imports": {
@@ -136,14 +131,18 @@
   </head>
   <body>
     <div id="root">
-      <!-- Lightweight Splash Screen (Visible during JS download) -->
-      <div class="splash-container">
-        <svg class="splash-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M 15 50 L 50 15 L 85 15 L 85 42 L 63 42 L 53 50 L 63 58 L 85 58 L 85 85 L 50 85 Z" fill="#0062ff" />
-        </svg>
-        <div class="splash-text">Core_Initializing</div>
-        <div class="splash-progress-track">
-          <div class="splash-progress-bar"></div>
+      <!-- High-Performance Instant Splash Screen -->
+      <div class="splash-screen">
+        <div class="logo-box">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 15 50 L 50 15 L 85 15 L 85 42 L 63 42 L 53 50 L 63 58 L 85 58 L 85 85 L 50 85 Z" fill="#0062ff" />
+          </svg>
+        </div>
+        <div class="status-container">
+          <div class="status-text">CORE_INITIALIZING</div>
+          <div class="progress-track">
+            <div class="progress-bar"></div>
+          </div>
         </div>
       </div>
     </div>
