@@ -1,5 +1,7 @@
 {
   "name": "CPcash Wallet RPC",
   "description": "High-performance Multisig & EOA Wallet for EVM and TRON",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "camera"
+  ]
 }

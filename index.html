@@ -5,110 +5,59 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- Resource Pre-connectivity for high-latency networks -->
+    <!-- 性能优化：关键资源预连接 -->
     <link rel="preconnect" href="https://esm.sh" crossorigin />
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="dns-prefetch" href="https://esm.sh" />
-    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
 
-    <!-- SEO Primary Tags -->
-    <title>CPcash Wallet RPC | High-performance Multisig & EOA Wallet</title>
-    <meta name="description" content="Advanced high-performance web-based wallet for EVM and TRON networks. Securely manage multisig vaults with lightning-fast RPC connectivity." />
+    <title>CPcash Wallet RPC | Secure Node Access</title>
+    <meta name="description" content="Advanced high-performance wallet for EVM and TRON. Manage multisig vaults with lightning-fast RPC connectivity." />
 
-    <!-- Critical CSS (Inlined for instant rendering) -->
     <style>
       :root {
         --bg-splash: #f8fafc;
         --brand-blue: #0062ff;
         --text-muted: #94a3b8;
       }
-
       html, body {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        background-color: var(--bg-splash);
-        overflow: hidden;
+        margin: 0; padding: 0; width: 100%; height: 100%;
+        background-color: var(--bg-splash); overflow: hidden;
       }
-
-      /* Native CSS Animations (Hardware Accelerated) */
       @keyframes logo-pulse {
-        0%, 100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 0px rgba(0,98,255,0)); }
-        50% { transform: scale(0.94); opacity: 0.7; filter: drop-shadow(0 0 15px rgba(0,98,255,0.1)); }
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(0.95); opacity: 0.8; }
       }
-
-      @keyframes scanner-line {
+      @keyframes scanner {
         0% { transform: translateX(-100%); }
-        100% { transform: translateX(350%); }
+        100% { transform: translateX(400%); }
       }
-
-      @keyframes text-blink {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-
       .splash-screen {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        z-index: 99999;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        position: fixed; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; z-index: 99999;
+        font-family: 'Inter', system-ui, sans-serif;
       }
-
       .logo-box {
-        width: 80px;
-        height: 80px;
-        margin-bottom: 40px;
-        animation: logo-pulse 2.5s ease-in-out infinite;
-        will-change: transform, opacity;
+        width: 80px; height: 80px; margin-bottom: 40px;
+        animation: logo-pulse 2s ease-in-out infinite;
       }
-
-      .status-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 16px;
-      }
-
+      .status-container { display: flex; flex-direction: column; align-items: center; gap: 12px; }
       .status-text {
-        font-family: 'JetBrains Mono', 'Courier New', monospace;
-        font-size: 10px;
-        font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.6em;
-        text-indent: 0.6em;
-        animation: text-blink 2s ease-in-out infinite;
+        font-family: 'JetBrains Mono', monospace; font-size: 9px;
+        font-weight: 800; color: var(--text-muted);
+        text-transform: uppercase; letter-spacing: 0.5em; text-indent: 0.5em;
       }
-
       .progress-track {
-        width: 160px;
-        height: 1px;
-        background: rgba(0, 98, 255, 0.08);
-        position: relative;
-        overflow: hidden;
-        border-radius: 1px;
+        width: 140px; height: 1px; background: rgba(0, 98, 255, 0.1);
+        position: relative; overflow: hidden;
       }
-
       .progress-bar {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 40px;
-        height: 100%;
-        background: var(--brand-blue);
-        box-shadow: 0 0 10px var(--brand-blue);
-        animation: scanner-line 1.2s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-        will-change: transform;
+        position: absolute; top: 0; left: 0; width: 40px; height: 100%;
+        background: var(--brand-blue); animation: scanner 1.5s linear infinite;
       }
     </style>
 
     <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script type="importmap">
 {
   "imports": {
@@ -121,8 +70,8 @@
     "bs58": "https://esm.sh/bs58@5.0.0",
     "three": "https://esm.sh/three@0.160.0",
     "tronweb": "https://esm.sh/tronweb@5.3.0",
-    "react/": "https://esm.sh/react@18.3.1/",
-    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "vite": "https://esm.sh/vite@^7.3.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
@@ -131,7 +80,6 @@
   </head>
   <body>
     <div id="root">
-      <!-- High-Performance Instant Splash Screen -->
       <div class="splash-screen">
         <div class="logo-box">
           <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -139,10 +87,8 @@
           </svg>
         </div>
         <div class="status-container">
-          <div class="status-text">CORE_INITIALIZING</div>
-          <div class="progress-track">
-            <div class="progress-bar"></div>
-          </div>
+          <div class="status-text">INITIALIZING_SECURE_RPC</div>
+          <div class="progress-track"><div class="progress-bar"></div></div>
         </div>
       </div>
     </div>

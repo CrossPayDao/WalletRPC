@@ -1,11 +1,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { TransactionRecord, ChainConfig } from '../types';
+import { TransactionRecord, ChainConfig, TokenConfig } from '../types';
 import { FeeService } from '../../../services/feeService';
 import { handleTxError } from '../utils';
+import { TronService } from '../../../services/tronService';
 
-// Exported for SendForm
 export interface ProcessResult {
   success: boolean;
   hash?: string;
@@ -15,10 +15,10 @@ export interface ProcessResult {
 
 /**
  * 【交易生命周期管理器】
- * 目的：处理 Nonce 连续性、费用预估、交易广播以及收据轮询。
  */
 export const useTransactionManager = ({
   wallet,
+  tronPrivateKey,
   provider,
   activeChain,
   activeChainId,
@@ -28,35 +28,20 @@ export const useTransactionManager = ({
 }: any) => {
 
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
-
-  /**
-   * 【核心优化：本地 Nonce 追踪 (Local Nonce Tracking)】
-   * 为什么：在高频发笔交易时，链上的 nonce 更新有延迟。
-   * 解决：在内存中维护 localNonceRef。发送一笔就自增，直到下一次 syncNonce 强制对齐。
-   * 好处：解决了“交易覆盖”和“nonce冲突”报错问题。
-   */
   const localNonceRef = useRef<number | null>(null);
 
-  /**
-   * 同步 Nonce
-   */
   const syncNonce = useCallback(async () => {
     if (!wallet || !provider || activeChain.chainType === 'TRON') return;
     try {
-      const n = await provider.getTransactionCount(wallet.address);
+      const n = await provider.getTransactionCount(wallet.address, 'pending');
       localNonceRef.current = n;
     } catch (e) {
       console.error("Nonce sync failed", e);
     }
   }, [wallet, provider, activeChain]);
 
-  /**
-   * 【逻辑：收据轮询器 (Receipt Polling)】
-   * 目的：自动将 'submitted' 状态的交易更新为 'confirmed' 或 'failed'。
-   * 协作：一旦确认，调用外部传入的 fetchData() 刷新全局余额。
-   */
   useEffect(() => {
-    if (!provider || transactions.length === 0) return;
+    if (activeChain.chainType === 'TRON' || !provider || transactions.length === 0) return;
     
     const interval = setInterval(async () => {
       const pending = transactions.filter(t => t.status === 'submitted');
@@ -81,22 +66,62 @@ export const useTransactionManager = ({
     return () => clearInterval(interval);
   }, [provider, transactions, activeChain, fetchData]);
 
-  /**
-   * 【逻辑：交易处理管道 (Transaction Pipeline)】
-   */
   const handleSendSubmit = async (data: any): Promise<ProcessResult> => {
     try {
-      if (!wallet || !provider) throw new Error("Wallet/Provider not ready");
+      const isTron = activeChain.chainType === 'TRON';
+      
+      if (!wallet || (!provider && !isTron)) {
+        throw new Error("Wallet/Provider not ready");
+      }
 
-      // Handle Safe Proposal if in SAFE mode
       if (data.activeAccountType === 'SAFE') {
         if (!handleSafeProposal) throw new Error("Safe manager not initialized");
-        const amountWei = ethers.parseEther(data.amount || "0");
+        const amountWei = ethers.parseUnits(data.amount || "0", data.asset === 'NATIVE' ? 18 : 6); 
         const success = await handleSafeProposal(data.recipient, amountWei, data.customData || "0x", `Send ${data.amount} ${data.asset}`);
         return { success };
       }
 
-      // EOA Send
+      // TRON 发送逻辑
+      if (isTron) {
+        if (!tronPrivateKey) throw new Error("TRON private key missing");
+        
+        // 查找代币配置以获取精度
+        const token = activeChain.tokens.find((t: TokenConfig) => t.symbol === data.asset);
+        const decimals = data.asset === 'NATIVE' ? 6 : (token?.decimals || 6);
+        const amountSun = ethers.parseUnits(data.amount || "0", decimals);
+
+        const result = await TronService.sendTransaction(
+          activeChain.defaultRpcUrl,
+          tronPrivateKey,
+          data.recipient,
+          amountSun,
+          data.asset === 'NATIVE' ? undefined : token?.address
+        );
+
+        if (result.success && result.txid) {
+          const id = Date.now().toString();
+          setTransactions(prev => [{
+            id,
+            chainId: activeChainId,
+            hash: result.txid,
+            status: 'submitted',
+            timestamp: Date.now(),
+            summary: `Send ${data.amount} ${data.asset === 'NATIVE' ? activeChain.currencySymbol : data.asset}`
+          }, ...prev]);
+          
+          // TRON 广播后通常 3 秒左右生效，提前刷新
+          setTimeout(fetchData, 3000);
+          return { success: true, hash: result.txid };
+        } else {
+          throw new Error(result.error || "TRON broadcast failed");
+        }
+      }
+
+      // EVM 发送逻辑
+      if (localNonceRef.current === null) {
+        await syncNonce();
+      }
+
       const amountWei = ethers.parseEther(data.amount || "0");
       const txRequest: ethers.TransactionRequest = {
         to: data.recipient,
@@ -128,18 +153,15 @@ export const useTransactionManager = ({
 
       return { success: true, hash: tx.hash };
     } catch (e: any) {
+      const errorMsg = e?.message || "";
+      if (errorMsg.includes("nonce") || errorMsg.includes("replacement transaction")) {
+        localNonceRef.current = null;
+      }
       const error = handleTxError(e);
       setError(error);
       return { success: false, error };
     }
   };
 
-  /**
-   * 添加交易记录
-   */
-  const addTransactionRecord = (record: TransactionRecord) => {
-    setTransactions(prev => [record, ...prev]);
-  };
-
-  return { transactions, localNonceRef, handleSendSubmit, syncNonce, addTransactionRecord };
+  return { transactions, localNonceRef, handleSendSubmit, syncNonce, addTransactionRecord: (r: any) => setTransactions(p => [r, ...p]) };
 };

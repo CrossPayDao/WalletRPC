@@ -15,7 +15,7 @@ export const WalletOnboarding: React.FC<any> = ({ input, setInput, onImport, err
   
   return (
     <div className={`
-      min-h-screen flex flex-col items-center justify-center p-6 bg-[#f8fafc] text-slate-900 relative overflow-hidden
+      h-screen flex flex-col items-center p-6 bg-[#f8fafc] text-slate-900 relative overflow-y-auto scroll-smooth
       transition-all duration-1000 ease-in-out
       ${isExiting ? 'opacity-0 scale-105 filter blur-md bg-white' : 'opacity-100 scale-100'}
     `}>
@@ -36,10 +36,10 @@ export const WalletOnboarding: React.FC<any> = ({ input, setInput, onImport, err
          </button>
       </div>
 
-      <div className="max-w-md w-full relative z-10 animate-tech-in">
+      <div className="max-w-md w-full my-auto relative z-10 animate-tech-in py-12">
         
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#0062ff] to-[#00d4ff] rounded-2xl mb-6 shadow-xl relative">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-[#0062ff] to-[#00d4ff] rounded-2xl mb-6 shadow-xl relative mx-auto">
             <BrandLogo size={40} color="white" />
             <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 bg-white text-slate-900 text-[7px] font-black rounded border border-slate-100 shadow-sm uppercase">
               {t('wallet.title')}

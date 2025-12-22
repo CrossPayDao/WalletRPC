@@ -82,8 +82,8 @@ export const WalletApp: React.FC = () => {
   if (view === 'intro_animation') return <ParticleIntro fadeOut={isIntroFadingOut} />;
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col animate-in fade-in duration-700">
-      <header className="bg-white/80 border-b border-slate-200 sticky top-0 z-40 px-4 md:px-8 h-16 flex items-center justify-between shadow-sm backdrop-blur-md">
+    <div className="h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col animate-in fade-in duration-700 overflow-hidden">
+      <header className="bg-white/80 border-b border-slate-200 sticky top-0 z-40 px-4 md:px-8 h-16 flex items-center justify-between shadow-sm backdrop-blur-md flex-shrink-0">
          <div className="flex items-center space-x-4">
              <div className="hidden lg:flex items-center mr-4 border-r border-slate-100 pr-6">
                 <BrandLogo size={24} color="#0062ff" className="mr-3" />
@@ -101,7 +101,7 @@ export const WalletApp: React.FC = () => {
                   </div>
                   <div className="text-left hidden md:block">
                      <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{activeAccountType === 'EOA' ? t('wallet.active_key') : t('wallet.node_master')}</div>
-                     <div className="text-sm font-black text-slate-900 truncate max-w-[150px] uppercase italic tracking-tight">{activeAccountType === 'EOA' ? (activeChain.chainType === 'TRON' ? 'Tron_Node' : t('wallet.master_key')) : `Safe_${activeSafeAddress?.slice(0,4)}`}</div>
+                     <div className="text-sm font-black text-slate-900 truncate max-w-[150px] uppercase italic tracking-tight">{activeAccountType === 'EOA' ? (activeChain.chainType === 'TRON' ? t('wallet.tron_node') : t('wallet.master_key')) : `Safe_${activeSafeAddress?.slice(0,4)}`}</div>
                   </div>
                   {activeChain.chainType !== 'TRON' && <ChevronDown className={`w-4 h-4 text-slate-300 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />}
                 </button>
@@ -145,7 +145,7 @@ export const WalletApp: React.FC = () => {
          </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 relative scroll-smooth">
          <div className="max-w-5xl mx-auto relative z-10">
             {localNotification && <NotificationToast message={localNotification} onClose={() => setLocalNotification(null)} />}
             {error && <TechAlert type="error" message={error} onClose={() => setError(null)} />}

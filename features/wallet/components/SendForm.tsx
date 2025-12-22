@@ -171,7 +171,7 @@ export const SendForm: React.FC<SendFormProps> = ({
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t('settings.currency')}</label>
               <div className="flex items-center space-x-2">
                 <span className="text-[11px] font-bold text-slate-400 uppercase">
-                  Available: <span className="text-[#0062ff]">{parseFloat(currentBalance).toFixed(4)}</span>
+                  {t('common.available')}: <span className="text-[#0062ff]">{parseFloat(currentBalance).toFixed(4)}</span>
                 </span>
                 <button 
                   onClick={() => onRefresh && onRefresh()} 
@@ -188,7 +188,7 @@ export const SendForm: React.FC<SendFormProps> = ({
                 value={selectedAsset} 
                 onChange={e => setSelectedAsset(e.target.value)}
               >
-                <option value="NATIVE">{activeChain.currencySymbol} (Native)</option>
+                <option value="NATIVE">{activeChain.currencySymbol} ({t('common.native_label')})</option>
                 {tokens.map(t_opt => <option key={t_opt.symbol} value={t_opt.symbol}>{t_opt.symbol} - {t_opt.name}</option>)}
               </select>
               <div className="absolute left-3 top-3.5 text-slate-400 pointer-events-none">

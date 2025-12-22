@@ -1,5 +1,7 @@
 
-export const en = {
+import { I18nSchema } from '../types';
+
+export const en: I18nSchema = {
   common: {
     confirm: "Confirm",
     cancel: "Cancel",
@@ -13,7 +15,11 @@ export const en = {
     propose: "Propose",
     execute: "Execute",
     sign: "Sign",
-    booting: "BOOTING..."
+    booting: "BOOTING...",
+    available: "Available",
+    unknown: "Unknown",
+    native: "NATIVE",
+    native_label: "Native"
   },
   intro: {
     secure_context: "INITIALIZING_SECURE_CONTEXT",
@@ -42,12 +48,13 @@ export const en = {
     no_logs: "No operations logged",
     asset_inventory: "Asset Inventory",
     import_token: "IMPORT_TOKEN",
+    import_token_btn: "IMPORT_TOKEN",
     custom: "Custom",
-    awaiting_consensus: "Awaiting_Consensus",
-    initializing_secure: "INITIALIZING_SECURE_CONTEXT"
+    tron_node: "Tron_Node"
   },
   tx: {
     send: "Broadcast Transaction",
+    send_btn: "SEND",
     recipient: "Target Registry",
     amount: "Transfer Volume",
     insufficient: "Liquidity Shortfall",
@@ -102,7 +109,8 @@ export const en = {
     error_length: "Invalid length",
     error_format: "Invalid format",
     sig_required: "Signature Required",
-    sigs_required: "Signatures Required"
+    sigs_required: "Signatures Required",
+    mod_btn: "SAFE_MOD"
   },
   settings: {
     title: "Settings",

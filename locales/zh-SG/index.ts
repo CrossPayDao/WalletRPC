@@ -1,5 +1,7 @@
 
-export const zhSG = {
+import { I18nSchema } from '../types';
+
+export const zhSG: I18nSchema = {
   common: {
     confirm: "确认",
     cancel: "取消",
@@ -13,7 +15,11 @@ export const zhSG = {
     propose: "提议",
     execute: "执行",
     sign: "签名",
-    booting: "启动中..."
+    booting: "启动中...",
+    available: "可用余额",
+    unknown: "未知网络",
+    native: "原生代币",
+    native_label: "原生资产"
   },
   intro: {
     secure_context: "正在初始化安全上下文",
@@ -42,12 +48,13 @@ export const zhSG = {
     no_logs: "暂无操作记录",
     asset_inventory: "资产清单",
     import_token: "导入代币",
+    import_token_btn: "导入代币",
     custom: "自定义",
-    awaiting_consensus: "等待共识确认",
-    initializing_secure: "正在初始化安全上下文"
+    tron_node: "波场节点"
   },
   tx: {
     send: "广播交易指令",
+    send_btn: "发送",
     recipient: "目标注册地址",
     amount: "转账数额",
     insufficient: "流动性不足",
@@ -102,7 +109,8 @@ export const zhSG = {
     error_length: "长度无效",
     error_format: "格式无效",
     sig_required: "个签名",
-    sigs_required: "个签名"
+    sigs_required: "个签名",
+    mod_btn: "修改权限"
   },
   settings: {
     title: "设置",
