@@ -2,7 +2,7 @@ import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SendForm } from '../../features/wallet/components/SendForm';
+import { SendForm, SendFormData } from '../../features/wallet/components/SendForm';
 import { LanguageProvider } from '../../contexts/LanguageContext';
 import { ChainConfig, TransactionRecord } from '../../features/wallet/types';
 
@@ -54,7 +54,7 @@ describe('SendForm UI', () => {
 
   it('选择 token 后会把 assetAddress 传给 onSend', async () => {
     const user = userEvent.setup();
-    const onSend = vi.fn(async () => ({ success: false, error: 'mock error' }));
+    const onSend = vi.fn<(data: SendFormData) => Promise<{ success: boolean; error: string }>>(async () => ({ success: false, error: 'mock error' }));
 
     renderWithProvider(
       <SendForm
@@ -78,7 +78,7 @@ describe('SendForm UI', () => {
     await user.click(screen.getByRole('button', { name: 'BROADCAST_TRANSACTION' }));
 
     expect(onSend).toHaveBeenCalledTimes(1);
-    const payload = onSend.mock.calls[0][0];
+    const payload = onSend.mock.calls[0]![0];
     expect(payload.asset).toBe('USDT');
     expect(payload.assetAddress.toLowerCase()).toBe(chain.tokens[0].address.toLowerCase());
     expect(payload.assetDecimals).toBe(6);

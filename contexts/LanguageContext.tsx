@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { locales } from '../locales';
 
 export type Language = 'en' | 'zh-SG';
@@ -35,35 +35,39 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   }, []);
 
-  const handleSetLanguage = (lang: Language) => {
+  const handleSetLanguage = useCallback((lang: Language) => {
     setLanguage(lang);
     localStorage.setItem('nexus_lang', lang);
-  };
+  }, []);
 
   /**
    * 【性能优势：常量级路径查找】
    * 时间复杂度 O(k)，k 为路径深度。相比全量正则替换，这种基于对象的查找性能极高。
    */
-  const t = (path: string): string => {
+  const t = useCallback((path: string): string => {
     const keys = path.split('.');
     const dict = locales[language];
     
-    let result: any = dict;
+    let result: unknown = dict;
     for (const key of keys) {
-      if (result && typeof result === 'object' && key in result) {
-        result = result[key];
+      if (result && typeof result === 'object' && key in (result as Record<string, unknown>)) {
+        result = (result as Record<string, unknown>)[key];
       } else {
         return path; 
       }
     }
     return typeof result === 'string' ? result : path;
-  };
+  }, [language]);
+
+  const contextValue = useMemo(() => ({
+    language,
+    setLanguage: handleSetLanguage,
+    t,
+    isSG: language === 'zh-SG'
+  }), [language, handleSetLanguage, t]);
 
   return (
-    <LanguageContext.Provider value={{ 
-      language, setLanguage: handleSetLanguage, t, 
-      isSG: language === 'zh-SG' 
-    }}>
+    <LanguageContext.Provider value={contextValue}>
       {children}
     </LanguageContext.Provider>
   );

@@ -1,12 +1,7 @@
 
 import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
 import { BrandLogo } from './BrandLogo';
 import { useTranslation } from '../../contexts/LanguageContext';
-
-if (typeof window !== 'undefined' && !(window as any).THREE) {
-  (window as any).THREE = THREE;
-}
 
 interface ParticleIntroProps {
   onComplete?: () => void;
@@ -16,37 +11,15 @@ interface ParticleIntroProps {
 export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOut = false }) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const requestRef = useRef<number>(0);
   const speedRef = useRef<number>(0.2);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    if (typeof THREE === 'undefined') return;
 
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0xf8fafc, 0.001);
-
-    const aspect = window.innerWidth / window.innerHeight;
-    const camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 3000);
-    camera.position.set(0, 0, 0);
-    camera.lookAt(0, 0, 1);
-
-    const renderer = new THREE.WebGLRenderer({ 
-      alpha: false,
-      antialias: true,
-      powerPreference: "high-performance"
-    });
-    
-    const setRendererSize = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setSize(width, height);
-    };
-    setRendererSize();
-    renderer.setClearColor(0xf8fafc, 1);
-    
-    const canvas = renderer.domElement;
+    const canvas = document.createElement('canvas');
+    canvasRef.current = canvas;
     Object.assign(canvas.style, {
       position: 'absolute',
       top: '0',
@@ -60,70 +33,93 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ onComplete, fadeOu
       opacity: '1',
       objectFit: 'cover'
     });
-    
+
     containerRef.current.appendChild(canvas);
 
-    const starGeo = new THREE.BufferGeometry();
-    const starCount = 3000;
-    const positions = new Float32Array(starCount * 3);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    for(let i=0; i<starCount; i++) {
-      positions[i*3] = (Math.random() - 0.5) * 1500;
-      positions[i*3+1] = (Math.random() - 0.5) * 1500;
-      positions[i*3+2] = Math.random() * 2000;
-    }
+    const depth = 1800;
+    const focal = 620;
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    let starCount = Math.max(1200, Math.floor((width * height) / 900));
 
-    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    
-    const starMaterial = new THREE.PointsMaterial({
-      color: 0x0062ff,
-      size: 2.0,
-      transparent: true,
-      opacity: 0.4,
-      sizeAttenuation: true,
-      blending: THREE.NormalBlending,
-      depthWrite: false
+    type Star = { x: number; y: number; z: number; size: number; alpha: number };
+    let stars: Star[] = [];
+
+    const resetStar = (): Star => ({
+      x: (Math.random() - 0.5) * width * 2.2,
+      y: (Math.random() - 0.5) * height * 2.2,
+      z: Math.random() * depth + 1,
+      size: Math.random() * 1.8 + 0.4,
+      alpha: Math.random() * 0.55 + 0.2
     });
 
-    const stars = new THREE.Points(starGeo, starMaterial);
-    scene.add(stars);
+    const initStars = () => {
+      stars = Array.from({ length: starCount }, resetStar);
+    };
+
+    const setCanvasSize = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      starCount = Math.max(1200, Math.floor((width * height) / 900));
+      initStars();
+    };
+    setCanvasSize();
 
     const animate = () => {
-      const positions = starGeo.attributes.position.array as Float32Array;
       if (speedRef.current < 6) speedRef.current *= 1.012;
 
-      for(let i=0; i<starCount; i++) {
-        positions[i*3 + 2] -= speedRef.current;
-        if (positions[i*3 + 2] < 0) {
-           positions[i*3 + 2] = 2000;
-           positions[i*3] = (Math.random() - 0.5) * 1500;
-           positions[i*3 + 1] = (Math.random() - 0.5) * 1500;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(0, 0, width, height);
+
+      for (let i = 0; i < stars.length; i++) {
+        const star = stars[i];
+        star.z -= speedRef.current;
+        if (star.z <= 1) {
+          stars[i] = resetStar();
+          continue;
         }
+
+        const k = focal / star.z;
+        const sx = star.x * k + width / 2;
+        const sy = star.y * k + height / 2;
+
+        if (sx < -30 || sx > width + 30 || sy < -30 || sy > height + 30) continue;
+
+        const depthFactor = 1 - star.z / depth;
+        const radius = star.size * (0.35 + depthFactor * 1.65);
+        const alpha = Math.min(0.9, star.alpha * (0.4 + depthFactor * 1.3));
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(0,98,255,${alpha})`;
+        ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+        ctx.fill();
       }
-      
-      starGeo.attributes.position.needsUpdate = true;
-      renderer.render(scene, camera);
+
       requestRef.current = requestAnimationFrame(animate);
     };
 
     requestRef.current = requestAnimationFrame(animate);
 
     const handleResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      setCanvasSize();
     };
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (containerRef.current && renderer.domElement) {
-        containerRef.current.removeChild(renderer.domElement);
+      if (containerRef.current && canvasRef.current) {
+        containerRef.current.removeChild(canvasRef.current);
       }
-      starGeo.dispose();
-      starMaterial.dispose();
-      renderer.dispose();
     };
   }, []);
 
