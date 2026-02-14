@@ -7,11 +7,16 @@ import { useTranslation } from '../../contexts/LanguageContext';
 
 // --- UI Components ---
 import { WalletOnboarding } from './components/WalletOnboarding';
-import { WalletDashboard } from './components/WalletDashboard';
-import { SendForm } from './components/SendForm';
-import { SafeQueue, SafeSettings, CreateSafe, TrackSafe } from './components/SafeViews';
-import { ChainModal, AddTokenModal, EditTokenModal } from './components/Modals';
-import { ParticleIntro } from '../../components/ui/ParticleIntro';
+const WalletDashboard = React.lazy(() => import('./components/WalletDashboard').then(m => ({ default: m.WalletDashboard })));
+const SendForm = React.lazy(() => import('./components/SendForm').then(m => ({ default: m.SendForm })));
+const SafeQueue = React.lazy(() => import('./components/SafeViews').then(m => ({ default: m.SafeQueue })));
+const SafeSettings = React.lazy(() => import('./components/SafeViews').then(m => ({ default: m.SafeSettings })));
+const CreateSafe = React.lazy(() => import('./components/SafeViews').then(m => ({ default: m.CreateSafe })));
+const TrackSafe = React.lazy(() => import('./components/SafeViews').then(m => ({ default: m.TrackSafe })));
+const ChainModal = React.lazy(() => import('./components/Modals').then(m => ({ default: m.ChainModal })));
+const AddTokenModal = React.lazy(() => import('./components/Modals').then(m => ({ default: m.AddTokenModal })));
+const EditTokenModal = React.lazy(() => import('./components/Modals').then(m => ({ default: m.EditTokenModal })));
+const ParticleIntro = React.lazy(() => import('../../components/ui/ParticleIntro').then(m => ({ default: m.ParticleIntro })));
 
 const TechAlert: React.FC<{ type: 'error' | 'success'; message: string; onClose?: () => void }> = ({ type, message, onClose }) => (
   <div className={`
@@ -86,7 +91,13 @@ export const WalletApp: React.FC = () => {
   }, [view, minTimePassed, isInitialFetchDone, setView]);
 
   if (view === 'onboarding' || !wallet) return <WalletOnboarding input={privateKeyOrPhrase} setInput={setPrivateKeyOrPhrase} onImport={onImportWrapper} error={error} isExiting={isOnboardingExiting} />;
-  if (view === 'intro_animation') return <ParticleIntro fadeOut={isIntroFadingOut} />;
+  if (view === 'intro_animation') {
+    return (
+      <React.Suspense fallback={<div className="h-screen bg-[#f8fafc]" />}>
+        <ParticleIntro fadeOut={isIntroFadingOut} />
+      </React.Suspense>
+    );
+  }
 
   return (
     <div className="h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col animate-in fade-in duration-700 overflow-hidden">
@@ -157,6 +168,7 @@ export const WalletApp: React.FC = () => {
             {localNotification && <NotificationToast message={localNotification} onClose={() => setLocalNotification(null)} />}
             {error && <TechAlert type="error" message={error} onClose={() => setError(null)} />}
 
+            <React.Suspense fallback={<div className="min-h-[320px] bg-white/70 rounded-2xl border border-slate-200" />}>
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                {view === 'dashboard' && <><WalletDashboard balance={balance} activeChain={activeChain} chains={chains} address={activeAddress || ''} isLoading={isLoading} onRefresh={fetchData} onSend={() => setView('send')} activeAccountType={activeAccountType} pendingTxCount={pendingSafeTxs.filter(t_tx => t_tx.nonce === safeDetails?.nonce).length} onViewQueue={() => setView('safe_queue')} onViewSettings={() => setView('settings')} tokens={activeChainTokens} tokenBalances={tokenBalances} onAddToken={() => setIsAddTokenModalOpen(true)} onEditToken={setTokenToEdit} transactions={transactions} /><div className="mt-12 mb-6 text-center opacity-20"><p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em] italic">{t('wallet.disclaimer')}</p></div></>}
                {view === 'send' && <SendForm activeChain={activeChain} tokens={activeChainTokens} balances={{ ...tokenBalances, NATIVE: balance }} activeAccountType={activeAccountType} recommendedNonce={currentNonce} onSend={handleSendSubmit} onBack={() => setView('dashboard')} onRefresh={fetchData} isLoading={isLoading} transactions={transactions} />}
@@ -165,12 +177,15 @@ export const WalletApp: React.FC = () => {
                {view === 'create_safe' && <CreateSafe onDeploy={deploySafe} onCancel={() => setView('dashboard')} isDeploying={isDeployingSafe} walletAddress={wallet?.address} />}
                {view === 'add_safe' && <TrackSafe onTrack={handleTrackSafe} onCancel={() => setView('dashboard')} isLoading={isLoading} />}
             </div>
+            </React.Suspense>
          </div>
       </main>
 
-      <ChainModal isOpen={isChainModalOpen} onClose={() => setIsChainModalOpen(false)} initialConfig={activeChain} onSave={handleSaveChain} chains={chains} onSwitchNetwork={setActiveChainId} />
-      <AddTokenModal isOpen={isAddTokenModalOpen} onClose={() => setIsAddTokenModalOpen(false)} onImport={confirmAddToken} isImporting={false} />
-      <EditTokenModal token={tokenToEdit} onClose={() => setTokenToEdit(null)} onSave={handleUpdateToken} onDelete={handleRemoveToken} />
+      <React.Suspense fallback={null}>
+        <ChainModal isOpen={isChainModalOpen} onClose={() => setIsChainModalOpen(false)} initialConfig={activeChain} onSave={handleSaveChain} chains={chains} onSwitchNetwork={setActiveChainId} />
+        <AddTokenModal isOpen={isAddTokenModalOpen} onClose={() => setIsAddTokenModalOpen(false)} onImport={confirmAddToken} isImporting={false} />
+        <EditTokenModal token={tokenToEdit} onClose={() => setTokenToEdit(null)} onSave={handleUpdateToken} onDelete={handleRemoveToken} />
+      </React.Suspense>
     </div>
   );
 };
