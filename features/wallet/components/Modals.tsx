@@ -5,6 +5,8 @@ import { Button } from '../../../components/ui/Button';
 import { ChainConfig, TokenConfig } from '../types';
 import { getActiveExplorer } from '../utils';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { validateEvmRpcEndpoint, isHttpUrl } from '../../../services/rpcValidation';
+import { TronService } from '../../../services/tronService';
 
 interface ChainModalProps {
   isOpen: boolean;
@@ -12,7 +14,7 @@ interface ChainModalProps {
   initialConfig: ChainConfig;
   chains: ChainConfig[];
   onSwitchNetwork: (chainId: number) => void;
-  onSave: (config: ChainConfig) => void;
+  onSave: (config: ChainConfig) => void | Promise<void>;
 }
 
 export const ChainModal: React.FC<ChainModalProps> = ({ 
@@ -27,6 +29,8 @@ export const ChainModal: React.FC<ChainModalProps> = ({
   const [config, setConfig] = useState<Partial<ChainConfig>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [rpcMode, setRpcMode] = useState<'preset' | 'custom'>('preset');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -34,12 +38,65 @@ export const ChainModal: React.FC<ChainModalProps> = ({
       const isPublic = initialConfig.publicRpcUrls?.includes(initialConfig.defaultRpcUrl);
       setRpcMode(isPublic ? 'preset' : 'custom');
       setShowAdvanced(false);
+      setSaveError(null);
+      setIsSaving(false);
     }
   }, [isOpen, initialConfig]);
 
   if (!isOpen) return null;
   const resolvedConfig = { ...initialConfig, ...config } as ChainConfig;
   const activeExplorer = getActiveExplorer(resolvedConfig);
+
+  const handleSave = async () => {
+    setSaveError(null);
+
+    const rpcUrlRaw = String(resolvedConfig.defaultRpcUrl || '').trim();
+    if (!rpcUrlRaw) {
+      setSaveError('RPC URL is required.');
+      return;
+    }
+    if (!isHttpUrl(rpcUrlRaw)) {
+      setSaveError('RPC URL must start with http(s)://');
+      return;
+    }
+
+    const tronNormalized = resolvedConfig.chainType === 'TRON' ? TronService.normalizeHost(rpcUrlRaw) : rpcUrlRaw;
+    const initialNormalized =
+      resolvedConfig.chainType === 'TRON'
+        ? TronService.normalizeHost(String(initialConfig.defaultRpcUrl || '').trim())
+        : String(initialConfig.defaultRpcUrl || '').trim();
+    const rpcChanged = tronNormalized !== initialNormalized;
+
+    setIsSaving(true);
+    try {
+      if (rpcChanged) {
+        if (resolvedConfig.chainType === 'TRON') {
+          const probe = await TronService.probeRpc(tronNormalized);
+          if (!probe.ok) {
+            setSaveError(`TRON RPC validation failed: ${probe.error || 'unknown error'}`);
+            return;
+          }
+        } else {
+          const ok = await validateEvmRpcEndpoint(rpcUrlRaw, resolvedConfig.id);
+          if (!ok.ok) {
+            setSaveError(ok.error);
+            return;
+          }
+        }
+      }
+
+      await onSave({
+        ...resolvedConfig,
+        defaultRpcUrl: resolvedConfig.chainType === 'TRON' ? tronNormalized : rpcUrlRaw
+      });
+      onClose();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      setSaveError(msg || 'Save failed');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -110,8 +167,8 @@ export const ChainModal: React.FC<ChainModalProps> = ({
             </div>
           </div>
 
-          <div>
-             <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center justify-between w-full py-2 text-slate-500 hover:text-slate-800 transition-colors">
+	          <div>
+	             <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center justify-between w-full py-2 text-slate-500 hover:text-slate-800 transition-colors">
                 <div className="flex items-center space-x-2"><Search className="w-4 h-4" /><span className="text-xs font-bold uppercase tracking-wide">{t('settings.tech_details')}</span></div>
                 {showAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
              </button>
@@ -126,14 +183,23 @@ export const ChainModal: React.FC<ChainModalProps> = ({
                   </div>
                </div>
              )}
-          </div>
-        </div>
+	          </div>
+	        </div>
 
-        <div className="p-6 pt-2 bg-white border-t border-slate-50 mt-auto"><Button onClick={() => onSave(config as ChainConfig)} className="w-full py-3 shadow-lg">{t('common.save')}</Button></div>
-      </div>
-    </div>
-  );
-};
+	        <div className="p-6 pt-2 bg-white border-t border-slate-50 mt-auto space-y-2">
+            {saveError && (
+              <div role="alert" className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {saveError}
+              </div>
+            )}
+            <Button onClick={handleSave} isLoading={isSaving} className="w-full py-3 shadow-lg">
+              {t('common.save')}
+            </Button>
+          </div>
+	      </div>
+	    </div>
+	  );
+  };
 
 // Define AddTokenModalProps interface to fix "Cannot find name 'AddTokenModalProps'" error
 interface AddTokenModalProps {

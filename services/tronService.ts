@@ -13,6 +13,18 @@ const bytesToHex = (bytes: ArrayLike<number>): string => {
  * 意义：本项目不使用庞大的 TronWeb 官方库，而是基于 ethers.js 基础加密包手动实现协议转换和交易签名。
  */
 export const TronService = {
+  normalizeHost: (host: string): string => {
+    let baseUrl = (host || '').trim();
+    if (!baseUrl) return '';
+
+    // Normalize TronGrid JSON-RPC urls to the REST base used by this client.
+    baseUrl = baseUrl.replace(/\/+$/, '');
+    if (baseUrl.endsWith('/jsonrpc')) {
+      baseUrl = baseUrl.slice(0, -'/jsonrpc'.length);
+    }
+    baseUrl = baseUrl.replace(/\/+$/, '');
+    return baseUrl;
+  },
   
   isValidBase58Address: (address: string): boolean => {
     try {
@@ -34,7 +46,7 @@ export const TronService = {
    */
   getBalance: async (host: string, address: string): Promise<bigint> => {
     try {
-      const baseUrl = host.endsWith('/') ? host.slice(0, -1) : host;
+      const baseUrl = TronService.normalizeHost(host);
       const response = await fetch(`${baseUrl}/wallet/getaccount`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,7 +68,7 @@ export const TronService = {
    */
   getTRC20Balance: async (host: string, contractAddress: string, ownerAddress: string): Promise<bigint> => {
     try {
-      const baseUrl = host.endsWith('/') ? host.slice(0, -1) : host;
+      const baseUrl = TronService.normalizeHost(host);
       const ownerHex = TronService.toHexAddress(ownerAddress).replace('0x', '');
       const contractHex = TronService.toHexAddress(contractAddress).replace('0x', '');
       
@@ -90,7 +102,7 @@ export const TronService = {
    */
   getTransactionInfo: async (host: string, txid: string): Promise<{ found: boolean; success?: boolean }> => {
     try {
-      const baseUrl = host.endsWith('/') ? host.slice(0, -1) : host;
+      const baseUrl = TronService.normalizeHost(host);
       const response = await fetch(`${baseUrl}/walletsolidity/gettransactioninfobyid`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,7 +122,7 @@ export const TronService = {
    * 构建、签名并广播交易
    */
   sendTransaction: async (host: string, privateKey: string, to: string, amount: bigint, contractAddress?: string): Promise<{ success: boolean; txid?: string; error?: string }> => {
-    const baseUrl = host.endsWith('/') ? host.slice(0, -1) : host;
+    const baseUrl = TronService.normalizeHost(host);
     const ownerAddress = TronService.addressFromPrivateKey(privateKey);
     const ownerHex = TronService.toHexAddress(ownerAddress).replace('0x', '');
     const toHex = TronService.toHexAddress(to).replace('0x', '');
@@ -184,6 +196,26 @@ export const TronService = {
     } catch (e: any) {
       console.error("TRON send failed", e);
       return { success: false, error: e.message };
+    }
+  },
+
+  probeRpc: async (host: string): Promise<{ ok: boolean; error?: string }> => {
+    const baseUrl = TronService.normalizeHost(host);
+    if (!baseUrl) return { ok: false, error: 'Missing TRON RPC base URL' };
+
+    try {
+      const response = await fetch(`${baseUrl}/wallet/getnowblock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (!response.ok) return { ok: false, error: `HTTP ${response.status}` };
+      const data = await response.json();
+      const looksLikeBlock = !!(data && (data.blockID || data.block_header || data.block_header?.raw_data));
+      return looksLikeBlock ? { ok: true } : { ok: false, error: 'Unexpected response' };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: msg };
     }
   },
 
