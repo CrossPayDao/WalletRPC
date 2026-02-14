@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ethers } from 'ethers';
 import { useWalletStorage } from './useWalletStorage';
 import { useWalletState } from './useWalletState';
@@ -171,6 +171,16 @@ export const useEvmWallet = () => {
     setView('dashboard');
   };
 
+  const handleSwitchNetwork = useCallback((chainId: number) => {
+    setActiveChainId(chainId);
+    setView('dashboard');
+    setIsMenuOpen(false);
+    if (activeAccountType === 'SAFE') {
+      setActiveAccountType('EOA');
+      setActiveSafeAddress(null);
+    }
+  }, [activeAccountType, setActiveAccountType, setActiveChainId, setActiveSafeAddress, setIsMenuOpen, setView]);
+
   const confirmAddToken = async (address: string) => {
     if (!provider || !address) return;
     if (!ethers.isAddress(address)) {
@@ -223,7 +233,7 @@ export const useEvmWallet = () => {
   return { 
     ...state, ...dataLayer, ...txMgr, ...safeMgr, ...storage,
     activeChain, activeAddress, activeChainTokens, provider,
-    handleSaveChain, handleTrackSafe, confirmAddToken, handleUpdateToken, handleRemoveToken,
+    handleSaveChain, handleTrackSafe, handleSwitchNetwork, confirmAddToken, handleUpdateToken, handleRemoveToken,
     currentNonce: safeDetails?.nonce || 0
   };
 };

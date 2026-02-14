@@ -59,7 +59,7 @@ export const WalletApp: React.FC = () => {
     isChainModalOpen, setIsChainModalOpen, isAddTokenModalOpen, setIsAddTokenModalOpen, tokenToEdit, setTokenToEdit, balance, tokenBalances, transactions,
     safeDetails, pendingSafeTxs, currentNonce, isDeployingSafe, trackedSafes, setTrackedSafes, privateKeyOrPhrase, setPrivateKeyOrPhrase, handleImport,
     fetchData, handleSendSubmit, handleAddSignature, handleExecutePending, confirmAddToken, handleUpdateToken, handleRemoveToken, handleSaveChain,
-    handleTrackSafe, deploySafe, addOwnerTx, removeOwnerTx, changeThresholdTx, setError
+    handleTrackSafe, handleSwitchNetwork, deploySafe, addOwnerTx, removeOwnerTx, changeThresholdTx, setError
   } = useEvmWallet();
 
   const [localNotification, setLocalNotification] = React.useState<string | null>(null);
@@ -167,7 +167,7 @@ export const WalletApp: React.FC = () => {
          </div>
 
          <div className="flex items-center gap-2">
-            <button onClick={() => setIsChainModalOpen(true)} className="p-2.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-[#0062ff] transition-colors"><Settings className="w-5 h-5"/></button>
+            <button aria-label="open-network-settings" onClick={() => setIsChainModalOpen(true)} className="p-2.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-[#0062ff] transition-colors"><Settings className="w-5 h-5"/></button>
             <div className="w-px h-6 bg-slate-200 mx-1"></div>
             <button onClick={() => { setWallet(null); setPrivateKeyOrPhrase(''); setView('onboarding'); }} className="flex items-center space-x-2 px-3 py-2 hover:bg-red-50 rounded-xl text-slate-400 hover:text-red-600 transition-colors">
                <LogOut className="w-4 h-4"/><span className="text-[10px] font-black hidden md:inline uppercase tracking-widest">{t('wallet.kill_sig')}</span>
@@ -194,7 +194,7 @@ export const WalletApp: React.FC = () => {
       </main>
 
       <React.Suspense fallback={null}>
-        <ChainModal isOpen={isChainModalOpen} onClose={() => setIsChainModalOpen(false)} initialConfig={activeChain} onSave={handleSaveChain} chains={chains} onSwitchNetwork={setActiveChainId} />
+        <ChainModal isOpen={isChainModalOpen} onClose={() => setIsChainModalOpen(false)} initialConfig={activeChain} onSave={handleSaveChain} chains={chains} onSwitchNetwork={handleSwitchNetwork} />
         <AddTokenModal isOpen={isAddTokenModalOpen} onClose={() => setIsAddTokenModalOpen(false)} onImport={confirmAddToken} isImporting={false} />
         <EditTokenModal token={tokenToEdit} onClose={() => setTokenToEdit(null)} onSave={handleUpdateToken} onDelete={handleRemoveToken} />
       </React.Suspense>

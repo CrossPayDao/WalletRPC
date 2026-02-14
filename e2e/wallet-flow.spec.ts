@@ -93,4 +93,24 @@ test.describe('Wallet Flow (Mocked RPC)', () => {
     await expect(page.locator('header').getByRole('button', { name: /Node Master|Safe_/i }).first()).toBeVisible();
   });
 
+  test('切换网络时会自动退出 SAFE 上下文', async ({ page }) => {
+    await importToDashboard(page);
+
+    await openHeaderAccountMenu(page);
+    await page.getByRole('button', { name: /^IMPORT$/i }).click();
+    await page.getByPlaceholder('0x...').fill(TRACKED_SAFE);
+    await page.getByRole('button', { name: /INITIATE|同步/i }).click();
+
+    await expect(page.locator('button', { hasText: /QUEUE|队列/i }).first()).toBeVisible();
+    await expect(page.locator('button', { hasText: /MOD|设置/i }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'open-network-settings' }).click();
+    await page.locator('select').first().selectOption({ label: 'Ethereum Mainnet' });
+    await page.getByRole('button', { name: /SAVE CHANGES|保存更改/i }).click();
+
+    await expect(page.locator('button', { hasText: /QUEUE|队列/i })).toHaveCount(0);
+    await expect(page.locator('button', { hasText: /MOD|设置/i })).toHaveCount(0);
+    await expect(page.locator('header').getByRole('button', { name: /MASTER KEY|主密钥/i }).first()).toBeVisible();
+  });
+
 });
