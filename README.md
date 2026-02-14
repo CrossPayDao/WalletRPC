@@ -26,6 +26,14 @@ It provides a unified frontend experience for key EVM/TRON wallet flows, with au
 2. Start the development server  
    `npm run dev`
 
+## Single-File Production Build
+
+To generate a single `index.html` that inlines all JS and CSS for one-file deployment:
+
+`npm run build:single`
+
+Output: `dist-single/index.html`
+
 ## Testing
 
 ### Install test browsers (first time only)
