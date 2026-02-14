@@ -23,9 +23,7 @@ It provides a unified frontend experience for key EVM/TRON wallet flows, with au
 
 1. Install dependencies  
    `npm install`
-2. Configure environment variables  
-   Set `GEMINI_API_KEY` in `.env.local`
-3. Start the development server  
+2. Start the development server  
    `npm run dev`
 
 ## Testing
