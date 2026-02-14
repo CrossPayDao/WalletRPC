@@ -10,6 +10,7 @@ It provides a unified frontend experience for key EVM/TRON wallet flows, with au
 - Send native-token and ERC20-style token transfers
 - Track and operate Safe-style multisig accounts
 - Built-in unit, component, and end-to-end UI automation tests
+- Lifecycle-aware refresh strategy to avoid redundant RPC calls
 
 ## Tech Stack
 
@@ -45,3 +46,17 @@ It provides a unified frontend experience for key EVM/TRON wallet flows, with au
 
 ### Run all tests
 `npm run test:all`
+
+## Data Lifecycle And Refresh Policy
+
+- Passive data fetches are throttled by a cooldown window to avoid repeated identical requests during rapid UI transitions.
+- Manual refresh actions (balance refresh buttons) are treated as **force refresh** and bypass cooldown intentionally.
+- Transaction receipt polling starts only when there are pending `submitted` transactions on the active chain.
+- Post-confirmation balance refresh is coalesced, so multiple confirmations in the same window trigger only one refresh.
+- Safe queue rendering is scoped by `chainId + safeAddress + nonce` to avoid cross-context data mixing.
+
+## Notes For Maintainers
+
+- If you add new auto-refresh paths, keep them event-driven (state changes, pending tx, user intent) rather than timer-driven.
+- Prefer deduplication and short-lived caches for read RPCs; avoid indefinite cache growth.
+- Keep all chain-facing hooks strongly typed; avoid `any` in hook params and transaction payload structures.
