@@ -21,6 +21,12 @@ const openHeaderAccountMenu = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: /MASTER KEY|主密钥|TRON NODE/i }).click();
 };
 
+const switchNetwork = async (page: import('@playwright/test').Page, label: string) => {
+  await page.getByRole('button', { name: 'open-network-settings' }).click();
+  await page.locator('select').first().selectOption({ label });
+  await page.getByRole('button', { name: /SAVE CHANGES|保存更改/i }).click();
+};
+
 test.describe('Wallet Flow (Mocked RPC)', () => {
   test('导入后进入 Dashboard 并可切换到发送页', async ({ page }) => {
     await importToDashboard(page);
@@ -119,6 +125,31 @@ test.describe('Wallet Flow (Mocked RPC)', () => {
     await page.getByRole('button', { name: /KILL_SIG|结束会话/i }).click();
     await expect(page.getByPlaceholder('Private Key / Mnemonic')).toBeVisible();
     await expect(page.getByRole('button', { name: /Confirm|确认/i })).toBeDisabled();
+  });
+
+  test('删除当前链 Safe 不会误删其他链同地址记录', async ({ page }) => {
+    await importToDashboard(page);
+
+    await openHeaderAccountMenu(page);
+    await page.getByRole('button', { name: /^IMPORT$/i }).click();
+    await page.getByPlaceholder('0x...').fill(TRACKED_SAFE);
+    await page.getByRole('button', { name: /INITIATE|同步/i }).click();
+
+    await switchNetwork(page, 'Ethereum Mainnet');
+    await openHeaderAccountMenu(page);
+    await page.getByRole('button', { name: /^IMPORT$/i }).click();
+    await page.getByPlaceholder('0x...').fill(TRACKED_SAFE);
+    await page.getByRole('button', { name: /INITIATE|同步/i }).click();
+
+    await switchNetwork(page, 'BitTorrent Chain');
+    await openHeaderAccountMenu(page);
+    const safeEntry = page.getByRole('button', { name: 'Safe_0000' }).first();
+    await expect(safeEntry).toBeVisible();
+    await safeEntry.locator('xpath=../button[2]').click();
+
+    await switchNetwork(page, 'Ethereum Mainnet');
+    await openHeaderAccountMenu(page);
+    await expect(page.getByText(/Safe_0000/i).first()).toBeVisible();
   });
 
 });
