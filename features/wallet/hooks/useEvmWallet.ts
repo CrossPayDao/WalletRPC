@@ -166,7 +166,7 @@ export const useEvmWallet = () => {
   useEffect(() => {
     const isCoreView = view === 'intro_animation' || view === 'dashboard';
     if (wallet && isCoreView) {
-      fetchData();
+      fetchData(false);
       if (activeChain.chainType !== 'TRON') txMgr.syncNonce();
     }
   }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChain.chainType]);
@@ -199,6 +199,10 @@ export const useEvmWallet = () => {
     clearSession();
     txMgr.clearTransactions();
   }, [clearSession, txMgr]);
+
+  const handleRefreshData = useCallback(() => {
+    return fetchData(true);
+  }, [fetchData]);
 
   const confirmAddToken = async (address: string) => {
     if (!provider || !address) return;
@@ -252,7 +256,7 @@ export const useEvmWallet = () => {
   return { 
     ...state, ...dataLayer, ...txMgr, ...safeMgr, ...storage,
     activeChain, activeAddress, activeChainTokens, provider,
-    handleSaveChain, handleTrackSafe, handleSwitchNetwork, handleLogout, confirmAddToken, handleUpdateToken, handleRemoveToken,
+    handleSaveChain, handleTrackSafe, handleSwitchNetwork, handleLogout, handleRefreshData, confirmAddToken, handleUpdateToken, handleRemoveToken,
     currentNonce: safeDetails?.nonce || 0
   };
 };

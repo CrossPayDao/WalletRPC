@@ -30,7 +30,7 @@ interface UseTransactionManagerParams {
   activeChain: ChainConfig;
   activeChainId: number;
   activeAccountType: 'EOA' | 'SAFE';
-  fetchData: () => void | Promise<void>;
+  fetchData: (force?: boolean) => void | Promise<void>;
   setError: (message: string | null) => void;
   handleSafeProposal?: (to: string, value: bigint, data: string, summary: string) => Promise<boolean>;
 }
@@ -53,6 +53,7 @@ export const useTransactionManager = ({
 }: UseTransactionManagerParams) => {
 
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const postConfirmRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   /**
    * 【RPC 优化：Nonce 内存镜像 (Nonce Mirroring)】
@@ -90,6 +91,23 @@ export const useTransactionManager = ({
     }
   }, [wallet, provider, activeChain]);
 
+  const schedulePostConfirmRefresh = useCallback(() => {
+    if (postConfirmRefreshTimerRef.current) return;
+    postConfirmRefreshTimerRef.current = setTimeout(async () => {
+      postConfirmRefreshTimerRef.current = null;
+      await fetchData(true);
+    }, 1000);
+  }, [fetchData]);
+
+  useEffect(() => {
+    return () => {
+      if (postConfirmRefreshTimerRef.current) {
+        clearTimeout(postConfirmRefreshTimerRef.current);
+        postConfirmRefreshTimerRef.current = null;
+      }
+    };
+  }, []);
+
   /**
    * 【RPC 优化：定向收据轮询 (Targeted Receipt Polling)】
    * 意图：避免全量轮询。
@@ -98,10 +116,13 @@ export const useTransactionManager = ({
    * 2. 采用 5s 节流，避免在区块生成间隔内产生无效请求。
    */
   useEffect(() => {
-    if (transactions.length === 0) return;
+    const currentId = Number(activeChainId);
+    const hasPending = transactions.some(
+      (t) => t.status === 'submitted' && Number(t.chainId) === currentId && !!t.hash
+    );
+    if (!hasPending) return;
     
     const interval = setInterval(async () => {
-      const currentId = Number(activeChainId);
       const pending = transactions.filter(t => 
         t.status === 'submitted' && 
         Number(t.chainId) === currentId &&
@@ -124,7 +145,7 @@ export const useTransactionManager = ({
         if (validUpdates.length > 0) {
           const updateMap = new Map(validUpdates.map(u => [u.id, u.status]));
           setTransactions(prev => prev.map(t => updateMap.has(t.id) ? { ...t, status: updateMap.get(t.id)! } : t));
-          if (validUpdates.some(u => u.status === 'confirmed')) setTimeout(fetchData, 1000);
+          if (validUpdates.some(u => u.status === 'confirmed')) schedulePostConfirmRefresh();
         }
         return;
       }
@@ -146,12 +167,12 @@ export const useTransactionManager = ({
         const updateMap = new Map(validUpdates.map(u => [u.id, u.status]));
         setTransactions(prev => prev.map(t => updateMap.has(t.id) ? { ...t, status: updateMap.get(t.id)! } : t));
         // 只有成功包含后，才触发余额刷新（减少过程中的重复余额查询）
-        if (validUpdates.some(u => u.status === 'confirmed')) setTimeout(fetchData, 1000);
+        if (validUpdates.some(u => u.status === 'confirmed')) schedulePostConfirmRefresh();
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [provider, transactions, activeChain, activeChainId, fetchData]);
+  }, [provider, transactions, activeChain, activeChainId, schedulePostConfirmRefresh]);
 
   /**
    * 处理各种交易类型的提议与发送

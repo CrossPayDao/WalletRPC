@@ -113,7 +113,7 @@ const setupMocks = (activeAccountType: 'EOA' | 'SAFE') => {
   vi.mocked(useTransactionManager).mockReturnValue(txMgrMock as any);
   vi.mocked(useSafeManager).mockReturnValue(safeMgrMock as any);
 
-  return { stateMock };
+  return { stateMock, dataMock };
 };
 
 describe('useEvmWallet handleSwitchNetwork', () => {
@@ -145,5 +145,17 @@ describe('useEvmWallet handleSwitchNetwork', () => {
     expect(stateMock.setIsMenuOpen).toHaveBeenCalledWith(false);
     expect(stateMock.setActiveAccountType).not.toHaveBeenCalled();
     expect(stateMock.setActiveSafeAddress).not.toHaveBeenCalled();
+  });
+
+  it('handleRefreshData 会触发强制刷新', () => {
+    const { stateMock, dataMock } = setupMocks('EOA');
+
+    const { result } = renderHook(() => useEvmWallet());
+    act(() => {
+      result.current.handleRefreshData();
+    });
+
+    expect(stateMock.setActiveAccountType).not.toHaveBeenCalled();
+    expect(dataMock.fetchData).toHaveBeenCalledWith(true);
   });
 });
