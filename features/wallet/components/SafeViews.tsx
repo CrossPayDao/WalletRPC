@@ -224,6 +224,8 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       if (result) {
         if (safeDetails.threshold === 1) updateOpStatus(target, 'add', { step: 'verifying' });
         else { updateOpStatus(target, 'add', { step: 'success' }); setTimeout(() => clearOp(target, 'add'), 3000); }
+      } else {
+        updateOpStatus(target, 'add', { step: 'error', error: 'Proposal failed' });
       }
     } catch (e: any) { updateOpStatus(target, 'add', { step: 'error', error: e.message }); }
   };
@@ -242,6 +244,8 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       if (result) {
         if (safeDetails.threshold === 1) updateOpStatus(target, 'remove', { step: 'verifying' });
         else { updateOpStatus(target, 'remove', { step: 'success' }); setTimeout(() => clearOp(target, 'remove'), 2000); }
+      } else {
+        updateOpStatus(target, 'remove', { step: 'error', error: 'Proposal failed' });
       }
     } catch (e: any) { updateOpStatus(target, 'remove', { step: 'error', error: e.message }); }
   };

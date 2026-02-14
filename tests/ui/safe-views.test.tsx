@@ -131,6 +131,32 @@ describe('Safe views UI', () => {
     expect(onChangeThreshold).toHaveBeenCalledWith(2);
   });
 
+  it('SafeSettings 在提议返回 false 时展示错误状态', async () => {
+    const user = userEvent.setup();
+    const onAddOwner = vi.fn(async () => false);
+
+    wrap(
+      <SafeSettings
+        safeDetails={{
+          owners: ['0x1111111111111111111111111111111111111111'],
+          threshold: 1,
+          nonce: 0
+        }}
+        walletAddress="0x1111111111111111111111111111111111111111"
+        onRemoveOwner={vi.fn(async () => true)}
+        onAddOwner={onAddOwner}
+        onChangeThreshold={vi.fn(async () => true)}
+        onBack={vi.fn()}
+      />
+    );
+
+    await user.type(screen.getByPlaceholderText('0x...'), '0x2222222222222222222222222222222222222222');
+    await user.click(screen.getByRole('button', { name: 'PROPOSE' }));
+
+    expect(await screen.findByText('Proposal failed', {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(onAddOwner).toHaveBeenCalledTimes(1);
+  });
+
   it('CreateSafe 会过滤空 owner 并提交', async () => {
     const user = userEvent.setup();
     const onDeploy = vi.fn();
