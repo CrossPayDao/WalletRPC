@@ -38,6 +38,7 @@ describe('useWalletState', () => {
     expect(result.current.tronPrivateKey).toBe(`0x${'22'.repeat(32)}`);
     expect(result.current.tronWalletAddress?.startsWith('T')).toBe(true);
     expect(result.current.tronWalletAddress?.length).toBe(34);
+    expect(result.current.privateKeyOrPhrase).toBe('');
     expect(result.current.error).toBeNull();
   });
 
@@ -61,6 +62,7 @@ describe('useWalletState', () => {
     expect(success).toBe(true);
     expect(result.current.wallet?.address).toBe(new ethers.Wallet(`0x${privateKeyNoPrefix}`).address);
     expect(result.current.tronPrivateKey).toBe(`0x${privateKeyNoPrefix}`);
+    expect(result.current.privateKeyOrPhrase).toBe('');
   });
 
   it('非法输入会返回错误并设置统一报错信息', async () => {

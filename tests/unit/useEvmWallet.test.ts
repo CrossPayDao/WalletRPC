@@ -36,15 +36,22 @@ const chainB: ChainConfig = {
   tokens: []
 };
 
-const setupMocks = (activeAccountType: 'EOA' | 'SAFE') => {
+interface SetupOverrides {
+  trackedSafes?: Array<{ address: string; name: string; chainId: number }>;
+  pendingSafeTxs?: Array<any>;
+  safeDetails?: any;
+  activeSafeAddress?: string | null;
+}
+
+const setupMocks = (activeAccountType: 'EOA' | 'SAFE', overrides: SetupOverrides = {}) => {
   const storageMock = {
-    trackedSafes: [],
+    trackedSafes: overrides.trackedSafes ?? [],
     setTrackedSafes: vi.fn(),
     chains: [chainA, chainB],
     setChains: vi.fn(),
     customTokens: {},
     setCustomTokens: vi.fn(),
-    pendingSafeTxs: [],
+    pendingSafeTxs: overrides.pendingSafeTxs ?? [],
     setPendingSafeTxs: vi.fn()
   };
 
@@ -54,7 +61,7 @@ const setupMocks = (activeAccountType: 'EOA' | 'SAFE') => {
     tronWalletAddress: null,
     activeAccountType,
     setActiveAccountType: vi.fn(),
-    activeSafeAddress: '0x000000000000000000000000000000000000dEaD',
+    activeSafeAddress: overrides.activeSafeAddress ?? '0x000000000000000000000000000000000000dEaD',
     setActiveSafeAddress: vi.fn(),
     activeChainId: 199,
     setActiveChainId: vi.fn(),
@@ -84,7 +91,7 @@ const setupMocks = (activeAccountType: 'EOA' | 'SAFE') => {
     fetchData: vi.fn(async () => {}),
     balance: '0.00',
     tokenBalances: {},
-    safeDetails: null,
+    safeDetails: overrides.safeDetails ?? null,
     isInitialFetchDone: true
   };
 
@@ -113,7 +120,7 @@ const setupMocks = (activeAccountType: 'EOA' | 'SAFE') => {
   vi.mocked(useTransactionManager).mockReturnValue(txMgrMock as any);
   vi.mocked(useSafeManager).mockReturnValue(safeMgrMock as any);
 
-  return { stateMock, dataMock };
+  return { stateMock, dataMock, storageMock };
 };
 
 describe('useEvmWallet handleSwitchNetwork', () => {
@@ -157,5 +164,46 @@ describe('useEvmWallet handleSwitchNetwork', () => {
 
     expect(stateMock.setActiveAccountType).not.toHaveBeenCalled();
     expect(dataMock.fetchData).toHaveBeenCalledWith(true);
+  });
+
+  it('handleTrackSafe 对同链同地址执行去重', () => {
+    const existing = {
+      address: '0x000000000000000000000000000000000000dEaD',
+      name: 'Safe_dead',
+      chainId: 199
+    };
+    const { storageMock } = setupMocks('EOA', { trackedSafes: [existing] });
+    const { result } = renderHook(() => useEvmWallet());
+
+    act(() => {
+      result.current.handleTrackSafe('0x000000000000000000000000000000000000dead');
+    });
+
+    expect(storageMock.setTrackedSafes).toHaveBeenCalledTimes(1);
+    const updater = storageMock.setTrackedSafes.mock.calls[0][0] as (prev: typeof existing[]) => typeof existing[];
+    const next = updater([existing]);
+    expect(next).toHaveLength(1);
+  });
+
+  it('SAFE nonce 前进时会清理已过期的 pending 提案', () => {
+    const safeAddress = '0x000000000000000000000000000000000000dEaD';
+    const pending = [
+      { id: 'old', chainId: 199, safeAddress, nonce: 1 },
+      { id: 'current', chainId: 199, safeAddress, nonce: 3 },
+      { id: 'other-safe', chainId: 199, safeAddress: '0x000000000000000000000000000000000000beef', nonce: 1 },
+      { id: 'other-chain', chainId: 1, safeAddress, nonce: 1 }
+    ];
+    const { storageMock } = setupMocks('SAFE', {
+      activeSafeAddress: safeAddress,
+      pendingSafeTxs: pending,
+      safeDetails: { owners: [], threshold: 2, nonce: 3 }
+    });
+
+    renderHook(() => useEvmWallet());
+
+    expect(storageMock.setPendingSafeTxs).toHaveBeenCalled();
+    const updater = storageMock.setPendingSafeTxs.mock.calls[0][0] as (prev: typeof pending) => typeof pending;
+    const next = updater(pending);
+    expect(next.map((item) => item.id)).toEqual(['current', 'other-safe', 'other-chain']);
   });
 });

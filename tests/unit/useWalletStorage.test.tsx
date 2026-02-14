@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useWalletStorage } from '../../features/wallet/hooks/useWalletStorage';
 import { DEFAULT_CHAINS } from '../../features/wallet/config';
@@ -77,5 +77,27 @@ describe('useWalletStorage', () => {
       const saved = localStorage.getItem('zerostate_tracked_safes');
       expect(saved).toContain('Safe_dead');
     });
+  });
+
+  it('单个损坏的存储 key 不会阻断其他 key 的恢复', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    localStorage.setItem('zerostate_custom_chains', '{bad json');
+    localStorage.setItem('zerostate_tracked_safes', JSON.stringify([
+      {
+        address: '0x000000000000000000000000000000000000dEaD',
+        name: 'Safe_dead',
+        chainId: DEFAULT_CHAINS[0].id
+      }
+    ]));
+
+    const { result } = renderHook(() => useWalletStorage());
+
+    await waitFor(() => {
+      expect(result.current.trackedSafes).toHaveLength(1);
+      expect(result.current.trackedSafes[0].name).toBe('Safe_dead');
+    });
+    expect(result.current.chains[0].id).toBe(DEFAULT_CHAINS[0].id);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

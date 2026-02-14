@@ -145,4 +145,46 @@ describe('useTransactionManager', () => {
     expect(fetchData).toHaveBeenCalledWith(true);
     vi.useRealTimers();
   });
+
+  it('长时间未确认的 pending 交易会超时并停止轮询', async () => {
+    vi.useFakeTimers();
+    const getTransactionReceipt = vi.fn(async () => null);
+    const provider = { getTransactionReceipt } as any;
+
+    const { result } = renderHook(() =>
+      useTransactionManager({
+        wallet: null,
+        tronPrivateKey: null,
+        provider,
+        activeChain: evmChain,
+        activeChainId: 199,
+        activeAccountType: 'EOA',
+        fetchData: vi.fn(),
+        setError: vi.fn(),
+        handleSafeProposal: vi.fn()
+      })
+    );
+
+    act(() => {
+      result.current.addTransactionRecord({
+        id: 'tx-timeout',
+        chainId: 199,
+        hash: '0x' + '4'.repeat(64),
+        status: 'submitted',
+        timestamp: Date.now() - 11 * 60 * 1000,
+        summary: 'Pending timeout'
+      });
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getTransactionReceipt).not.toHaveBeenCalled();
+    expect(result.current.transactions[0].status).toBe('failed');
+    expect(result.current.transactions[0].error).toContain('timeout');
+    vi.useRealTimers();
+  });
 });

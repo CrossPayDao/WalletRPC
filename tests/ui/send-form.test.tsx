@@ -32,6 +32,26 @@ const chain: ChainConfig = {
 const txs: TransactionRecord[] = [];
 
 describe('SendForm UI', () => {
+  it('挂载时不会自动触发刷新', () => {
+    const onRefresh = vi.fn();
+    renderWithProvider(
+      <SendForm
+        activeChain={chain}
+        tokens={chain.tokens}
+        balances={{ NATIVE: '1.00', [chain.tokens[0].address.toLowerCase()]: '10.00' }}
+        activeAccountType="EOA"
+        recommendedNonce={0}
+        onSend={vi.fn(async () => ({ success: true }))}
+        onBack={vi.fn()}
+        onRefresh={onRefresh}
+        isLoading={false}
+        transactions={txs}
+      />
+    );
+
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
   it('金额为空时禁用发送按钮', () => {
     renderWithProvider(
       <SendForm
