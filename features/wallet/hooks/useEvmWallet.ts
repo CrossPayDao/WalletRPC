@@ -272,10 +272,9 @@ export const useEvmWallet = () => {
     if (autoDetectingRef.current || isAutoDetectingChain) return;
 
     fetchData(false);
-    if (activeChain.chainType !== 'TRON' && txMgr.localNonceRef.current === null) {
-      txMgr.syncNonce();
-    }
-  }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChain.chainType, isAutoDetectingChain, fetchData, txMgr.localNonceRef, txMgr.syncNonce]);
+    // Do not proactively sync EOA nonce on render. Nonce is only required when broadcasting a tx,
+    // and useTransactionManager already syncs it on-demand. This avoids unnecessary nonce RPC.
+  }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChain.chainType, isAutoDetectingChain, fetchData]);
 
   // Mark the intro preflight as done only after the selected chain has completed its first data sync.
   useEffect(() => {
