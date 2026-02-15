@@ -17,6 +17,9 @@ export type HttpConsoleEvent = {
   responseBody?: unknown;
   rpcMethod?: string;
   isRpcBatch?: boolean;
+  batchId?: string;
+  batchIndex?: number;
+  batchSize?: number;
   action?: string;
 };
 
@@ -89,6 +92,121 @@ const deriveRpcMeta = (body: unknown): { rpcMethod?: string; isBatch?: boolean }
     return { rpcMethod: typeof m === 'string' ? m : undefined, isBatch: false };
   }
   return {};
+};
+
+const shortHex = (v: unknown, head = 6, tail = 4): string | null => {
+  if (typeof v !== 'string') return null;
+  const s = v.trim();
+  if (!/^0x[0-9a-fA-F]+$/.test(s)) return null;
+  if (s.length <= 2 + head + tail) return s;
+  return `0x${s.slice(2, 2 + head)}...${s.slice(-tail)}`;
+};
+
+const concatIntent = (prefix: string, value: string): string => {
+  const p = String(prefix || '').trimEnd();
+  if (!p) return value;
+  // If translator uses ":" or "：" at the end, don't add extra spacing.
+  if (p.endsWith(':') || p.endsWith('：')) return `${p}${value}`;
+  return `${p} ${value}`;
+};
+
+const getSelector = (data: unknown): string | null => {
+  if (typeof data !== 'string') return null;
+  const s = data.trim().toLowerCase();
+  if (!s.startsWith('0x') || s.length < 10) return null;
+  return s.slice(0, 10); // 4-byte selector
+};
+
+const decodeAddressFromWord = (hexWord: string): string | null => {
+  const clean = hexWord.replace(/^0x/i, '');
+  if (clean.length !== 64) return null;
+  const addr = clean.slice(24);
+  if (!/^[0-9a-fA-F]{40}$/.test(addr)) return null;
+  return `0x${addr}`;
+};
+
+const decodeLastAddressParam = (data: unknown): string | null => {
+  if (typeof data !== 'string') return null;
+  const s = data.trim();
+  if (!s.startsWith('0x') || s.length < 10 + 64) return null;
+  const tail = s.slice(-64);
+  return decodeAddressFromWord(tail);
+};
+
+const describeEthCall = (call: any, t: (k: string) => string): string => {
+  const to = shortHex(call?.to, 6, 4);
+  const data = call?.data;
+  const sel = getSelector(data);
+
+  // Safe: getOwners()
+  if (sel === '0xa0e67e2b') {
+    return to ? concatIntent(t('console.intent_safe_owners'), to) : t('console.intent_safe_owners');
+  }
+  // Safe: getThreshold()
+  if (sel === '0xe75235b8') {
+    return to ? concatIntent(t('console.intent_safe_threshold'), to) : t('console.intent_safe_threshold');
+  }
+  // Safe: nonce()
+  if (sel === '0xaffed0e0') {
+    return to ? concatIntent(t('console.intent_safe_nonce'), to) : t('console.intent_safe_nonce');
+  }
+
+  // ERC20: balanceOf(address)
+  if (sel === '0x70a08231') {
+    const owner = shortHex(decodeLastAddressParam(data), 6, 4);
+    if (to && owner) return `${t('console.intent_token_balance')} ${owner} @ ${to}`;
+    if (to) return concatIntent(t('console.intent_token_balance'), to);
+    return t('console.intent_token_balance');
+  }
+
+  if (to) return concatIntent(t('console.intent_call_contract'), to);
+  return t('console.intent_call_contract');
+};
+
+const describeRpcCall = (rpcMethod: string | undefined, params: unknown, t: (k: string) => string): string => {
+  if (!rpcMethod) return t('console.action_unknown');
+  const p = Array.isArray(params) ? params : [];
+
+  if (rpcMethod === 'eth_getBalance') {
+    const addr = shortHex(p[0], 6, 4);
+    return addr ? concatIntent(t('console.intent_get_balance'), addr) : t('console.intent_get_balance');
+  }
+  if (rpcMethod === 'eth_getTransactionCount') {
+    const addr = shortHex(p[0], 6, 4);
+    return addr ? concatIntent(t('console.intent_get_nonce'), addr) : t('console.intent_get_nonce');
+  }
+  if (rpcMethod === 'eth_getTransactionReceipt') {
+    const h = shortHex(p[0], 10, 6);
+    return h ? concatIntent(t('console.intent_get_receipt'), h) : t('console.intent_get_receipt');
+  }
+  if (rpcMethod === 'eth_sendRawTransaction') {
+    return t('console.intent_broadcast_tx');
+  }
+  if (rpcMethod === 'eth_getCode') {
+    const addr = shortHex(p[0], 6, 4);
+    return addr ? concatIntent(t('console.intent_get_code'), addr) : t('console.intent_get_code');
+  }
+  if (rpcMethod === 'eth_getBlockByNumber') {
+    const tag = typeof p[0] === 'string' ? p[0] : null;
+    if (tag) return concatIntent(t('console.intent_get_block'), tag);
+    return t('console.intent_get_block');
+  }
+  if (rpcMethod === 'eth_call') {
+    const call = p[0];
+    return describeEthCall(call, t);
+  }
+  if (rpcMethod === 'eth_estimateGas') {
+    const call = p[0];
+    const to = shortHex((call as any)?.to, 6, 4);
+    return to ? concatIntent(t('console.intent_estimate_gas'), to) : t('console.intent_estimate_gas');
+  }
+
+  // Fallback to static semantic descriptions.
+  return actionForRpc(rpcMethod, t);
+};
+
+const withBatchPrefix = (base: string, batchSize: number, idx: number, t: (k: string) => string): string => {
+  return `${t('console.batch')}(${batchSize}) [${idx + 1}/${batchSize}] ${base}`;
 };
 
 const actionForRpc = (rpcMethod: string | undefined, t: (k: string) => string): string => {
@@ -186,47 +304,124 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
           // ignore
         }
 
-        const reqBodyFinal = category === 'rpc' ? redactRpcPayload(parsedBody) : parsedBody;
-        let action = t('console.action_unknown');
-        if (category === 'rpc') {
-          action = actionForRpc(rpcMeta.rpcMethod, t);
-        } else if (host && pathname && host !== 'unknown' && pathname.startsWith('/wallet')) {
-          action = actionForTronPath(pathname, t);
-        }
+        if (category === 'rpc' && Array.isArray(parsedBody)) {
+          const batch = parsedBody.filter((x) => x && typeof x === 'object') as any[];
+          const batchSize = batch.length;
+          const batchId = `${start}:${Math.random().toString(16).slice(2)}`;
+          const resp = Array.isArray(responseBody) ? (responseBody as any[]) : null;
+          const respById = new Map<any, any>();
+          if (resp) {
+            for (const r of resp) {
+              const id = (r as any)?.id;
+              if (id != null) respById.set(id, r);
+            }
+          }
 
-        pushEvent({
-          id: `${start}:${Math.random().toString(16).slice(2)}`,
-          ts: start,
-          category,
-          method,
-          url,
-          host: host || 'unknown',
-          status: res.status,
-          durationMs,
-          requestBody: reqBodyFinal,
-          responseBody,
-          rpcMethod: rpcMeta.rpcMethod,
-          isRpcBatch: rpcMeta.isBatch,
-          action
-        });
+          // Push in reverse to keep original order at the top (pushEvent prepends).
+          for (let i = batchSize - 1; i >= 0; i--) {
+            const item = batch[i];
+            const m = typeof item?.method === 'string' ? item.method : undefined;
+            const params = item?.params;
+            const actionBase = describeRpcCall(m, params, t);
+            const action = withBatchPrefix(actionBase, batchSize, i, t);
+            const itemResp = respById.size > 0 ? respById.get(item?.id) : resp?.[i];
+            pushEvent({
+              id: `${start}:${i}:${Math.random().toString(16).slice(2)}`,
+              ts: start,
+              category,
+              method,
+              url,
+              host: host || 'unknown',
+              status: res.status,
+              durationMs,
+              requestBody: redactRpcPayload(item),
+              responseBody: itemResp,
+              rpcMethod: m,
+              isRpcBatch: true,
+              batchId,
+              batchIndex: i,
+              batchSize,
+              action
+            });
+          }
+        } else {
+          const reqBodyFinal = category === 'rpc' ? redactRpcPayload(parsedBody) : parsedBody;
+          let action = t('console.action_unknown');
+          if (category === 'rpc') {
+            const m = rpcMeta.rpcMethod;
+            const params = (parsedBody as any)?.params;
+            action = describeRpcCall(m, params, t);
+          } else if (host && pathname && host !== 'unknown' && pathname.startsWith('/wallet')) {
+            action = actionForTronPath(pathname, t);
+          }
+
+          pushEvent({
+            id: `${start}:${Math.random().toString(16).slice(2)}`,
+            ts: start,
+            category,
+            method,
+            url,
+            host: host || 'unknown',
+            status: res.status,
+            durationMs,
+            requestBody: reqBodyFinal,
+            responseBody,
+            rpcMethod: rpcMeta.rpcMethod,
+            isRpcBatch: rpcMeta.isBatch,
+            action
+          });
+        }
         return res;
       } catch (e) {
         const durationMs = Date.now() - start;
-        pushEvent({
-          id: `${start}:${Math.random().toString(16).slice(2)}`,
-          ts: start,
-          category,
-          method,
-          url,
-          host: host || 'unknown',
-          status: undefined,
-          durationMs,
-          requestBody: category === 'rpc' ? redactRpcPayload(parsedBody) : parsedBody,
-          responseBody: { error: String((e as any)?.message || e) },
-          rpcMethod: rpcMeta.rpcMethod,
-          isRpcBatch: rpcMeta.isBatch,
-          action: category === 'rpc' ? actionForRpc(rpcMeta.rpcMethod, t) : t('console.action_unknown')
-        });
+        if (category === 'rpc' && Array.isArray(parsedBody)) {
+          const batch = parsedBody.filter((x) => x && typeof x === 'object') as any[];
+          const batchSize = batch.length;
+          const batchId = `${start}:${Math.random().toString(16).slice(2)}`;
+          for (let i = batchSize - 1; i >= 0; i--) {
+            const item = batch[i];
+            const m = typeof item?.method === 'string' ? item.method : undefined;
+            const params = item?.params;
+            const actionBase = describeRpcCall(m, params, t);
+            const action = withBatchPrefix(actionBase, batchSize, i, t);
+            pushEvent({
+              id: `${start}:${i}:${Math.random().toString(16).slice(2)}`,
+              ts: start,
+              category,
+              method,
+              url,
+              host: host || 'unknown',
+              status: undefined,
+              durationMs,
+              requestBody: redactRpcPayload(item),
+              responseBody: { error: String((e as any)?.message || e) },
+              rpcMethod: m,
+              isRpcBatch: true,
+              batchId,
+              batchIndex: i,
+              batchSize,
+              action
+            });
+          }
+        } else {
+          pushEvent({
+            id: `${start}:${Math.random().toString(16).slice(2)}`,
+            ts: start,
+            category,
+            method,
+            url,
+            host: host || 'unknown',
+            status: undefined,
+            durationMs,
+            requestBody: category === 'rpc' ? redactRpcPayload(parsedBody) : parsedBody,
+            responseBody: { error: String((e as any)?.message || e) },
+            rpcMethod: rpcMeta.rpcMethod,
+            isRpcBatch: rpcMeta.isBatch,
+            action: category === 'rpc'
+              ? describeRpcCall(rpcMeta.rpcMethod, (parsedBody as any)?.params, t)
+              : t('console.action_unknown')
+          });
+        }
         throw e;
       }
     }) as any;
@@ -268,7 +463,41 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
       const finalize = () => {
         const durationMs = Date.now() - start;
         let action = t('console.action_unknown');
-        if (category === 'rpc') action = actionForRpc(rpcMeta.rpcMethod, t);
+        if (category === 'rpc') {
+          if (Array.isArray(parsedBody)) {
+            // XHR response body is not reliably accessible; still split semantically.
+            const batch = parsedBody.filter((x) => x && typeof x === 'object') as any[];
+            const batchSize = batch.length;
+            const batchId = `${start}:${Math.random().toString(16).slice(2)}`;
+            for (let i = batchSize - 1; i >= 0; i--) {
+              const item = batch[i];
+              const m = typeof item?.method === 'string' ? item.method : undefined;
+              const params = item?.params;
+              const actionBase = describeRpcCall(m, params, t);
+              const a = withBatchPrefix(actionBase, batchSize, i, t);
+              pushEvent({
+                id: `${start}:${i}:${Math.random().toString(16).slice(2)}`,
+                ts: start,
+                category,
+                method,
+                url,
+                host: host || 'unknown',
+                status: this.status || undefined,
+                durationMs,
+                requestBody: redactRpcPayload(item),
+                responseBody: undefined,
+                rpcMethod: m,
+                isRpcBatch: true,
+                batchId,
+                batchIndex: i,
+                batchSize,
+                action: a
+              });
+            }
+            return;
+          }
+          action = describeRpcCall(rpcMeta.rpcMethod, (parsedBody as any)?.params, t);
+        }
         else if (host && pathname && pathname.startsWith('/wallet')) action = actionForTronPath(pathname, t);
 
         pushEvent({

@@ -23,6 +23,7 @@ const safeStringify = (v: unknown): string => {
 export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => void; mode?: 'page' | 'dock' }> = ({ onBack, onMinimize, mode = 'page' }) => {
   const { t } = useTranslation();
   const { enabled, setEnabled, events, clear } = useHttpConsole();
+  const isDock = mode === 'dock';
 
   const [query, setQuery] = useState('');
   const [onlyRpc, setOnlyRpc] = useState(true);
@@ -52,7 +53,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
   }, [events, selectedId]);
 
   return (
-    <div className="space-y-6 animate-tech-in">
+    <div className={`animate-tech-in ${isDock ? 'space-y-3 p-3' : 'space-y-6'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           {mode === 'page' && onBack && (
@@ -70,7 +71,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <Button
             variant={enabled ? 'primary' : 'outline'}
             className="text-xs h-10"
@@ -103,8 +104,8 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+      <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden ${isDock ? '' : ''}`}>
+        <div className={`border-b border-slate-100 bg-slate-50/50 space-y-3 ${isDock ? 'p-3' : 'p-4'}`}>
           <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
             <div className="flex items-center gap-2 text-slate-600">
               <Filter className="w-4 h-4" />
@@ -116,7 +117,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('console.search_placeholder')}
-                className="w-full sm:w-[320px] bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none font-mono"
+                className={`w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none font-mono ${isDock ? 'sm:w-full' : 'sm:w-[320px]'}`}
               />
               <button
                 className={`px-3 py-2 rounded-xl border text-xs font-black uppercase tracking-widest transition-colors ${
@@ -147,8 +148,8 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2">
-          <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
+        <div className={isDock ? 'grid grid-cols-1' : 'grid grid-cols-1 lg:grid-cols-2'}>
+          <div className={`divide-y divide-slate-100 overflow-y-auto ${isDock ? 'max-h-[35vh]' : 'max-h-[60vh]'}`}>
             {filtered.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-sm">{t('console.empty')}</div>
             ) : (
@@ -162,7 +163,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
                   <button
                     key={e.id}
                     onClick={() => setSelectedId(e.id)}
-                    className={`w-full text-left p-4 hover:bg-slate-50 transition-colors ${active ? 'bg-blue-50/30' : 'bg-white'}`}
+                    className={`w-full text-left ${isDock ? 'p-3' : 'p-4'} hover:bg-slate-50 transition-colors ${active ? 'bg-blue-50/30' : 'bg-white'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -172,7 +173,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
                           </span>
                           {e.rpcMethod && (
                             <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded">
-                              {e.isRpcBatch ? t('console.rpc_batch') : t('console.rpc_method')}: {e.rpcMethod}
+                              {t('console.rpc_method')}: {e.rpcMethod}
                             </span>
                           )}
                         </div>
@@ -180,7 +181,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
                           {e.action || t('console.action_unknown')}
                         </div>
                         <div className="mt-1 text-[10px] text-slate-400 font-mono truncate">
-                          {e.method} {e.host}
+                          {e.host}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -194,7 +195,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
             )}
           </div>
 
-          <div className="border-t lg:border-t-0 lg:border-l border-slate-100 p-4 bg-white max-h-[60vh] overflow-y-auto">
+          <div className={`${isDock ? 'border-t border-slate-100 p-3 bg-white max-h-[30vh] overflow-y-auto' : 'border-t lg:border-t-0 lg:border-l border-slate-100 p-4 bg-white max-h-[60vh] overflow-y-auto'}`}>
             {!selected ? (
               <div className="text-sm text-slate-400">{t('console.details')}</div>
             ) : (

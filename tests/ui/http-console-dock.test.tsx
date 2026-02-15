@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LanguageProvider } from '../../contexts/LanguageContext';
 import { HttpConsoleProvider, useHttpConsole } from '../../contexts/HttpConsoleContext';
@@ -43,5 +43,45 @@ describe('HttpConsole dock', () => {
 
     await user.click(screen.getByLabelText('console-minimize'));
     expect(await screen.findByLabelText('http-console-dock')).toBeTruthy();
+  });
+
+  it('batch RPC 应拆分为多条语义化请求', async () => {
+    const origFetch = vi.fn(async () => {
+      const body = JSON.stringify([
+        { jsonrpc: '2.0', id: 1, result: { number: '0x10' } },
+        { jsonrpc: '2.0', id: 2, result: '0xdeadbeef' }
+      ]);
+      return {
+        status: 200,
+        clone: () => ({ text: async () => body }),
+        text: async () => body
+      } as any;
+    });
+    (globalThis as any).fetch = origFetch;
+
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+
+    await user.click(screen.getByText('open'));
+
+    const batchReq = JSON.stringify([
+      { jsonrpc: '2.0', id: 1, method: 'eth_getBlockByNumber', params: ['latest', false] },
+      { jsonrpc: '2.0', id: 2, method: 'eth_sendRawTransaction', params: ['0x' + 'ab'.repeat(200)] }
+    ]);
+    await act(async () => {
+      await (window.fetch as any)('https://rpc.example', { method: 'POST', body: batchReq });
+    });
+
+    // 期望至少出现两条语义化行为（区块查询 + 广播交易），并带有 Batch/批请求 前缀。
+    const batchRows = await screen.findAllByText(/Batch\(2\)|批请求\(2\)/);
+    expect(batchRows.length).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByText(/Get block|查询区块/)).toBeTruthy();
+    expect(await screen.findByText(/Broadcast transaction|广播交易/)).toBeTruthy();
   });
 });
