@@ -129,7 +129,7 @@ export const SafeQueue: React.FC<SafeQueueProps> = ({
   );
 };
 
-type ProcessStep = 'idle' | 'building' | 'syncing' | 'verifying' | 'timeout' | 'success' | 'vanishing' | 'error';
+type ProcessStep = 'idle' | 'queued' | 'building' | 'syncing' | 'verifying' | 'timeout' | 'success' | 'vanishing' | 'error';
 type OpType = 'add' | 'remove';
 
 interface OptimisticOp {
@@ -139,7 +139,7 @@ interface OptimisticOp {
   error?: string;
 }
 
-const VERIFY_TIMEOUT_MS = 60_000;
+const VERIFY_TIMEOUT_MS = 180_000;
 
 interface SafeSettingsProps {
   safeDetails: SafeDetails;
@@ -168,6 +168,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   const verifyRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const refreshInFlightRef = useRef(false);
   const refreshRef = useRef(onRefreshSafeDetails);
+  const queuedRunnerRef = useRef(false);
 
   const isOwner = useMemo(() => {
     if (!walletAddress) return false;
@@ -178,9 +179,14 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     refreshRef.current = onRefreshSafeDetails;
   }, [onRefreshSafeDetails]);
 
-  // 在 verifying（扫描）阶段主动拉取 Safe 元数据，避免“没有任何请求但一直扫描”的假象
+  const hasInFlightOp = useMemo(() => {
+    const inFlightSteps: ProcessStep[] = ['building', 'syncing', 'verifying', 'timeout'];
+    return optimisticOps.some((op) => inFlightSteps.includes(op.step));
+  }, [optimisticOps]);
+
+  // 在 verifying/timeout（扫描/超时）阶段主动拉取 Safe 元数据，避免“没有任何请求但一直扫描”的假象
   useEffect(() => {
-    const hasVerifying = optimisticOps.some((op) => op.step === 'verifying');
+    const hasVerifying = optimisticOps.some((op) => op.step === 'verifying' || op.step === 'timeout');
     const refresh = refreshRef.current;
 
     if (!hasVerifying || !refresh) {
@@ -218,6 +224,60 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       }
     };
   }, [optimisticOps]);
+
+  // 对于阈值为 1 的“闪电执行”成员变更：将连续广播请求组织成队列，避免 Safe nonce 过期导致的扫描超时/失败。
+  useEffect(() => {
+    if (queuedRunnerRef.current) return;
+    if (safeDetails.threshold !== 1) return;
+    if (!isOwner) return;
+    if (hasInFlightOp) return;
+    const next = optimisticOps.find((op) => op.step === 'queued');
+    if (!next) return;
+
+    queuedRunnerRef.current = true;
+    const target = next.address.toLowerCase();
+    const type = next.type;
+
+    const run = async () => {
+      // 可能已经在链上完成了（或被其他操作完成），则直接清理。
+      const ownersLower = safeDetails.owners.map((o) => o.toLowerCase());
+      if (type === 'add' && ownersLower.includes(target)) {
+        updateOpStatus(target, type, { step: 'vanishing' });
+        await new Promise((r) => setTimeout(r, 500));
+        setOptimisticOps((prev) => prev.filter((op) => !(op.type === type && op.address.toLowerCase() === target)));
+        return;
+      }
+      if (type === 'remove' && !ownersLower.includes(target)) {
+        updateOpStatus(target, type, { step: 'vanishing' });
+        await new Promise((r) => setTimeout(r, 500));
+        setOptimisticOps((prev) => prev.filter((op) => !(op.type === type && op.address.toLowerCase() === target)));
+        return;
+      }
+
+      updateOpStatus(target, type, { step: 'building', error: undefined });
+      await new Promise((r) => setTimeout(r, 600));
+      updateOpStatus(target, type, { step: 'syncing' });
+
+      try {
+        const result =
+          type === 'add'
+            ? await onAddOwner(target, safeDetails.threshold)
+            : await onRemoveOwner(target, Math.min(safeDetails.threshold, Math.max(1, safeDetails.owners.length - 1)));
+
+        if (result) {
+          updateOpStatus(target, type, { step: 'verifying' });
+        } else {
+          updateOpStatus(target, type, { step: 'error', error: t('safe.op_proposal_failed') });
+        }
+      } catch (e: any) {
+        updateOpStatus(target, type, { step: 'error', error: e?.message || t('safe.op_fault') });
+      }
+    };
+
+    void run().finally(() => {
+      queuedRunnerRef.current = false;
+    });
+  }, [optimisticOps, safeDetails.threshold, safeDetails.owners, hasInFlightOp, isOwner, onAddOwner, onRemoveOwner, t]);
 
   useEffect(() => {
     const makeKey = (op: { address: string; type: OpType }) => `${op.type}:${op.address.toLowerCase()}`;
@@ -272,10 +332,10 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       let changed = false;
       const next = prev.map(op => {
         const addrLower = op.address.toLowerCase();
-        if (op.type === 'remove' && (op.step === 'verifying' || op.step === 'timeout') && !currentAddrs.includes(addrLower)) {
+        if (op.type === 'remove' && (op.step === 'queued' || op.step === 'verifying' || op.step === 'timeout') && !currentAddrs.includes(addrLower)) {
           changed = true; return { ...op, step: 'vanishing' as const };
         }
-        if (op.type === 'add' && (op.step === 'verifying' || op.step === 'timeout') && currentAddrs.includes(addrLower)) {
+        if (op.type === 'add' && (op.step === 'queued' || op.step === 'verifying' || op.step === 'timeout') && currentAddrs.includes(addrLower)) {
           changed = true; return { ...op, step: 'vanishing' as const };
         }
         return op;
@@ -315,8 +375,10 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     const target = inputAddr.toLowerCase();
     if (displayOwners.some(o => o.address.toLowerCase() === target && o.step !== 'idle')) return;
     setNewOwnerInput(''); 
-    setOptimisticOps(prev => [...prev, { address: target, type: 'add', step: 'building' }]);
+    const shouldQueue = safeDetails.threshold === 1 && hasInFlightOp && isOwner;
+    setOptimisticOps(prev => [...prev, { address: target, type: 'add', step: shouldQueue ? 'queued' : 'building' }]);
     if (!isOwner) { updateOpStatus(target, 'add', { step: 'error', error: t('safe.op_access_denied') }); return; }
+    if (shouldQueue) return;
     await new Promise(r => setTimeout(r, 600));
     updateOpStatus(target, 'add', { step: 'syncing' });
     try {
@@ -333,8 +395,10 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   const handleStartRemoval = async (owner: string) => {
     const target = owner.toLowerCase();
     if (optimisticOps.some(op => op.address.toLowerCase() === target && op.step !== 'idle')) return;
-    setOptimisticOps(prev => [...prev, { address: target, type: 'remove', step: 'building' }]);
+    const shouldQueue = safeDetails.threshold === 1 && hasInFlightOp && isOwner;
+    setOptimisticOps(prev => [...prev, { address: target, type: 'remove', step: shouldQueue ? 'queued' : 'building' }]);
     if (!isOwner) { updateOpStatus(target, 'remove', { step: 'error', error: t('safe.op_access_denied') }); return; }
+    if (shouldQueue) return;
     await new Promise(r => setTimeout(r, 600));
     updateOpStatus(target, 'remove', { step: 'syncing' });
     try {
@@ -380,6 +444,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
 	                    <div className="flex items-center space-x-3 w-full">
 	                       <div className="w-8 h-8 flex items-center justify-center">
 	                          {step === 'building' && <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />}
+	                          {step === 'queued' && <Clock className="w-5 h-5 text-slate-400 animate-pulse" />}
 	                          {step === 'syncing' && <Zap className="w-5 h-5 text-amber-500 animate-pulse" />}
 	                          {step === 'verifying' && <Activity className="w-5 h-5 text-[#0062ff] animate-[pulse_1.5s_infinite]" />}
 	                          {step === 'timeout' && <AlertCircle className="w-5 h-5 text-amber-500 animate-pulse" />}
@@ -388,6 +453,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
 	                       </div>
 	                       <div className="flex-1 min-w-0">
 	                          <div className={`text-[10px] font-black uppercase tracking-[0.2em] mb-0.5 truncate ${step === 'error' ? 'text-red-600' : (step === 'verifying' ? 'text-[#0062ff]' : (step === 'timeout' ? 'text-amber-600' : 'text-slate-400'))}`}>
+	                             {step === 'queued' && t('safe.op_queued')}
 	                             {step === 'building' && t('safe.op_constructing')}
 	                             {step === 'syncing' && t('safe.op_broadcasting')}
 	                             {step === 'verifying' && t('safe.op_scanning')}
@@ -396,10 +462,10 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
 	                             {step === 'error' && (item.error || t('safe.op_fault'))}
 	                          </div>
 	                       </div>
-	                       {(step === 'error' || step === 'success' || step === 'timeout') && <button onClick={() => clearOp(item.address, item.opType)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-4 h-4" /></button>}
-	                    </div>
-	                  </div>
-	                )}
+	                       {(step === 'error' || step === 'success' || step === 'timeout' || step === 'queued') && <button onClick={() => clearOp(item.address, item.opType)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-4 h-4" /></button>}
+		                    </div>
+		                  </div>
+		                )}
                 <div className="flex items-center min-w-0 flex-1">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black mr-3 flex-shrink-0 transition-colors ${item.isPending ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>{item.isPending ? <Plus className="w-3.5 h-3.5" /> : (idx + 1)}</div>
                   <span className={`font-mono text-sm truncate tracking-tight ${item.isPending ? 'text-green-700 italic font-bold' : 'text-slate-600'}`}>{item.address}</span>

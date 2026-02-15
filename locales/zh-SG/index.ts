@@ -177,6 +177,7 @@ export const zhSG: I18nSchema = {
     to_label: "目标",
     op_constructing: "构建中...",
     op_broadcasting: "广播中...",
+    op_queued: "排队中...",
     op_scanning: "扫描中...",
     op_timeout: "扫描超时",
     op_verified: "已验证",
