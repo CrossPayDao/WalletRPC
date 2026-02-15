@@ -8,16 +8,20 @@ const bytesToHex = (bytes: ArrayLike<number>): string => {
 
 const fetchWithTimeout = async (input: string, init: RequestInit, timeoutMs: number) => {
   const controller = new AbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeout = new Promise<never>((_, reject) => {
-    const t = setTimeout(() => {
+    timeoutId = setTimeout(() => {
       try { controller.abort(); } catch { /* ignore */ }
-      clearTimeout(t);
       reject(new Error('Request timeout'));
     }, timeoutMs);
   });
 
-  const req = fetch(input, { ...init, signal: controller.signal });
-  return await Promise.race([req, timeout]);
+  try {
+    const req = fetch(input, { ...init, signal: controller.signal });
+    return await Promise.race([req, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 };
 
 const postJson = async <T>(url: string, body: unknown, timeoutMs: number = 8000): Promise<T> => {
