@@ -129,7 +129,7 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
               {activeAccountType === 'SAFE' && activeChain.chainType !== 'TRON' && (
                 <>
                   <Button onClick={onViewQueue} variant="secondary" className="w-full h-12 font-black">
-                    {t('safe.queue_title').toUpperCase()} {pendingTxCount > 0 && <span className="ml-2 bg-[#0062ff] text-white px-1.5 rounded-sm text-[9px]">{pendingTxCount}</span>}
+                    {t('safe.queue_title')} {pendingTxCount > 0 && <span className="ml-2 bg-[#0062ff] text-white px-1.5 rounded-sm text-[9px]">{pendingTxCount}</span>}
                   </Button>
                   <Button onClick={onViewSettings} variant="outline" className="w-full h-12 font-black uppercase">{t('safe.mod_btn')}</Button>
                 </>

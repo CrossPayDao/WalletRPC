@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { SAFE_ABI, PROXY_FACTORY_ABI, ZERO_ADDRESS, SENTINEL_OWNERS, getSafeConfig, ERC20_ABI } from '../config';
 import { FeeService } from '../../../services/feeService';
 import { ChainConfig, SafeDetails, SafePendingTx, TrackedSafe, TransactionRecord } from '../types';
+import { useTranslation } from '../../../contexts/LanguageContext';
 
 /**
  * 【多签中枢管理器 - RPC 优化增强版】
@@ -43,6 +44,7 @@ export const useSafeManager = ({
   syncNonce,
   addTransactionRecord
 }: UseSafeManagerParams) => {
+  const { t } = useTranslation();
 
   const [isDeployingSafe, setIsDeployingSafe] = useState(false);
   const isProposingRef = useRef(false);
@@ -60,7 +62,7 @@ export const useSafeManager = ({
   const handleSafeProposal = async (to: string, value: bigint, data: string, summary?: string): Promise<boolean> => {
       if (!wallet || !activeSafeAddress || !provider) return false;
       
-      if (isProposingRef.current) throw new Error("Busy...");
+      if (isProposingRef.current) throw new Error(t('safe.err_busy'));
       isProposingRef.current = true;
       
       try {
@@ -74,7 +76,7 @@ export const useSafeManager = ({
         ]);
         
         const isOwner = owners.some((o: string) => o.toLowerCase() === wallet.address.toLowerCase());
-        if (!isOwner) throw new Error("Not an owner");
+        if (!isOwner) throw new Error(t('safe.err_not_owner'));
         
         // [本地计算] 不占用网络
         const safeTxHash = await safeContract.getTransactionHash(
@@ -99,7 +101,7 @@ export const useSafeManager = ({
               to, value, data, 0, 0, 0, 0, ZERO_ADDRESS, ZERO_ADDRESS, adjustedSig, overrides
            );
            
-           addTransactionRecord({ id: Date.now().toString(), chainId: activeChainId, hash: tx.hash, status: 'submitted', timestamp: Date.now(), summary: summary || "Safe Exec" });
+           addTransactionRecord({ id: Date.now().toString(), chainId: activeChainId, hash: tx.hash, status: 'submitted', timestamp: Date.now(), summary: summary || t('safe.summary_safe_exec') });
            return true;
         } else {
            // 否则仅作为提议存入内存，0 RPC。
@@ -113,13 +115,13 @@ export const useSafeManager = ({
               nonce: currentNonce,
               safeTxHash,
               signatures: { [wallet.address]: adjustedSig },
-              summary: summary || "Proposal"
+              summary: summary || t('safe.summary_proposal')
            }]);
            setView('safe_queue');
            return true;
         }
       } catch (e: any) {
-        setError(e.message || "Proposal failed");
+        setError(e.message || t('safe.err_proposal_failed'));
         return false;
       } finally {
         isProposingRef.current = false;
@@ -155,8 +157,8 @@ export const useSafeManager = ({
       const overrides = FeeService.buildOverrides(feeData, activeChain.gasLimits?.safeSetup || 2000000);
 
       const tx = await factory.createProxyWithNonce(config.singleton, initializer, saltNonce, overrides);
-      addTransactionRecord({ id: Date.now().toString(), chainId: activeChainId, hash: tx.hash, status: 'submitted', timestamp: Date.now(), summary: "Deploying Safe Vault" });
-      setNotification("Safe deployment submitted");
+      addTransactionRecord({ id: Date.now().toString(), chainId: activeChainId, hash: tx.hash, status: 'submitted', timestamp: Date.now(), summary: t('safe.summary_deploy_safe') });
+      setNotification(t('safe.notice_safe_deploy_submitted'));
 
       if (predictedAddress) {
         tx.wait()
@@ -169,14 +171,14 @@ export const useSafeManager = ({
             setActiveSafeAddress(predictedAddress);
             setActiveAccountType('SAFE');
             setView('dashboard');
-            setNotification("Safe deployed successfully");
+            setNotification(t('safe.notice_safe_deployed_success'));
           })
           .catch((err: any) => {
-            setError(err?.message || "Safe deployment failed after submission");
+            setError(err?.message || t('safe.err_safe_deploy_failed_after_submit'));
           });
       }
     } catch (e: any) {
-      setError(e.message || "Deployment failed");
+      setError(e.message || t('safe.err_deployment_failed'));
     } finally {
       setIsDeployingSafe(false);
     }
@@ -188,7 +190,7 @@ export const useSafeManager = ({
   const addOwnerTx = async (owner: string, threshold: number) => {
     const safeContract = new ethers.Contract(activeSafeAddress, SAFE_ABI);
     const data = safeContract.interface.encodeFunctionData("addOwnerWithThreshold", [owner, threshold]);
-    return handleSafeProposal(activeSafeAddress, 0n, data, `Add Owner: ${owner.slice(0,6)}`);
+    return handleSafeProposal(activeSafeAddress, 0n, data, `${t('safe.summary_add_owner')}: ${owner.slice(0,6)}`);
   };
 
   // Fix: Added implementation for handleAddSignature
@@ -197,7 +199,7 @@ export const useSafeManager = ({
     try {
       const ownersLower = (safeDetails?.owners || []).map((o: string) => o.toLowerCase());
       if (ownersLower.length > 0 && !ownersLower.includes(wallet.address.toLowerCase())) {
-        throw new Error("Current wallet is not a Safe owner");
+        throw new Error(t('safe.err_current_wallet_not_owner'));
       }
       const flatSig = await wallet.signMessage(ethers.getBytes(tx.safeTxHash));
       const sig = ethers.Signature.from(flatSig);
@@ -207,9 +209,9 @@ export const useSafeManager = ({
       setPendingSafeTxs((prev: SafePendingTx[]) => prev.map(p => 
         p.id === tx.id ? { ...p, signatures: { ...p.signatures, [wallet.address]: adjustedSig } } : p
       ));
-      setNotification("Signature added");
+      setNotification(t('safe.notice_signature_added'));
     } catch (e: any) {
-      setError(e.message || "Signing failed");
+      setError(e.message || t('safe.err_signing_failed'));
     }
   };
 
@@ -224,7 +226,7 @@ export const useSafeManager = ({
         .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
       const requiredThreshold = safeDetails?.threshold || 1;
       if (sortedOwners.length < requiredThreshold) {
-        throw new Error("Not enough valid owner signatures");
+        throw new Error(t('safe.err_not_enough_signatures'));
       }
       const signatures = ethers.concat(sortedOwners.map(owner => tx.signatures[owner]));
 
@@ -247,9 +249,9 @@ export const useSafeManager = ({
 
       // Clear from queue after successful broadcast
       setPendingSafeTxs((prev: SafePendingTx[]) => prev.filter(p => p.id !== tx.id));
-      setNotification("Execution broadcasted");
+      setNotification(t('safe.notice_execution_broadcasted'));
     } catch (e: any) {
-      setError(e.message || "Execution failed");
+      setError(e.message || t('safe.err_execution_failed'));
     }
   };
 
@@ -259,18 +261,18 @@ export const useSafeManager = ({
     const safeContract = new ethers.Contract(activeSafeAddress, SAFE_ABI, provider);
     const owners = await safeContract.getOwners();
     const index = owners.findIndex((o: string) => o.toLowerCase() === owner.toLowerCase());
-    if (index === -1) throw new Error("Owner not found");
+    if (index === -1) throw new Error(t('safe.err_owner_not_found'));
     const prevOwner = index === 0 ? SENTINEL_OWNERS : owners[index - 1];
 
     const data = safeContract.interface.encodeFunctionData("removeOwner", [prevOwner, owner, threshold]);
-    return handleSafeProposal(activeSafeAddress, 0n, data, `Remove Owner: ${owner.slice(0, 6)}`);
+    return handleSafeProposal(activeSafeAddress, 0n, data, `${t('safe.summary_remove_owner')}: ${owner.slice(0, 6)}`);
   };
 
   // Fix: Added implementation for changeThresholdTx
   const changeThresholdTx = async (threshold: number) => {
     const safeContract = new ethers.Contract(activeSafeAddress, SAFE_ABI);
     const data = safeContract.interface.encodeFunctionData("changeThreshold", [threshold]);
-    return handleSafeProposal(activeSafeAddress, 0n, data, `Change Threshold: ${threshold}`);
+    return handleSafeProposal(activeSafeAddress, 0n, data, `${t('safe.summary_change_threshold')}: ${threshold}`);
   };
 
   return { 

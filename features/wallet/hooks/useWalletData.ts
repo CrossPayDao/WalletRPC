@@ -4,6 +4,7 @@ import { ethers } from 'ethers';
 import { TronService } from '../../../services/tronService';
 import { ERC20_ABI, SAFE_ABI } from '../config';
 import { SafeDetails, ChainConfig, TokenConfig } from '../types';
+import { useTranslation } from '../../../contexts/LanguageContext';
 
 /**
  * 【数据抓取引擎 - 高可靠同步版】
@@ -29,6 +30,7 @@ export const useWalletData = ({
   setIsLoading,
   setError
 }: UseWalletDataParams) => {
+  const { t } = useTranslation();
   
   const [balance, setBalance] = useState<string>('0.00');
   const [tokenBalances, setTokenBalances] = useState<Record<string, string>>({});
@@ -166,7 +168,7 @@ export const useWalletData = ({
         setTokenBalances(currentBalances);
       }
     } catch {
-      setError("Data synchronization fault");
+      setError(t('wallet.data_sync_fault'));
     } finally {
       if (requestId === requestIdRef.current) {
         setIsLoading(false);

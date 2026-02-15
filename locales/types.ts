@@ -33,6 +33,11 @@ export interface I18nSchema {
     network_node_updated: string;
     invalid_token_address: string;
     token_already_exists: string;
+    token_imported: string;
+    token_import_failed: string;
+    token_updated: string;
+    token_removed: string;
+    data_sync_fault: string;
   };
   tx: {
     send: string; send_btn: string; recipient: string; amount: string;
@@ -65,6 +70,26 @@ export interface I18nSchema {
     op_fault: string;
     op_access_denied: string;
     op_proposal_failed: string;
+    err_busy: string;
+    err_not_owner: string;
+    err_proposal_failed: string;
+    err_signing_failed: string;
+    err_execution_failed: string;
+    err_current_wallet_not_owner: string;
+    err_not_enough_signatures: string;
+    notice_safe_deploy_submitted: string;
+    notice_safe_deployed_success: string;
+    notice_signature_added: string;
+    notice_execution_broadcasted: string;
+    err_safe_deploy_failed_after_submit: string;
+    err_deployment_failed: string;
+    err_owner_not_found: string;
+    summary_safe_exec: string;
+    summary_proposal: string;
+    summary_deploy_safe: string;
+    summary_add_owner: string;
+    summary_remove_owner: string;
+    summary_change_threshold: string;
   };
   settings: {
     title: string; subtitle: string; current_network: string; rpc_connection: string;

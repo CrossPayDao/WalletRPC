@@ -258,9 +258,9 @@ export const useEvmWallet = () => {
         [activeChainId]: [...(prev[activeChainId] || []), newToken]
       }));
       setIsAddTokenModalOpen(false);
-      setNotification(`Imported ${symbol} successfully`);
+      setNotification(`${t('wallet.token_imported')}: ${symbol}`);
     } catch (e) {
-      setError("Failed to import token.");
+      setError(t('wallet.token_import_failed'));
     } finally { setIsLoading(false); }
   };
 
@@ -270,7 +270,7 @@ export const useEvmWallet = () => {
       [activeChainId]: (prev[activeChainId] || []).map(t => t.address === token.address ? token : t)
     }));
     setTokenToEdit(null);
-    setNotification("Token updated");
+    setNotification(t('wallet.token_updated'));
   };
 
   const handleRemoveToken = (address: string) => {
@@ -279,7 +279,7 @@ export const useEvmWallet = () => {
       [activeChainId]: (prev[activeChainId] || []).filter(t => t.address !== address)
     }));
     setTokenToEdit(null);
-    setNotification("Token removed");
+    setNotification(t('wallet.token_removed'));
   };
 
   return { 

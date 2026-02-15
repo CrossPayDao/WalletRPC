@@ -57,6 +57,12 @@ export const en: I18nSchema = {
     network_node_updated: "Network node updated",
     invalid_token_address: "Invalid token address.",
     token_already_exists: "Token already exists on this network."
+    ,
+    token_imported: "Imported token",
+    token_import_failed: "Failed to import token.",
+    token_updated: "Token updated",
+    token_removed: "Token removed",
+    data_sync_fault: "Data synchronization fault"
   },
   tx: {
     send: "Broadcast Transaction",
@@ -126,7 +132,27 @@ export const en: I18nSchema = {
     op_proposed: "Proposed",
     op_fault: "Fault",
     op_access_denied: "Access Denied",
-    op_proposal_failed: "Proposal failed"
+    op_proposal_failed: "Proposal failed",
+    err_busy: "Busy...",
+    err_not_owner: "Not an owner",
+    err_proposal_failed: "Proposal failed",
+    err_signing_failed: "Signing failed",
+    err_execution_failed: "Execution failed",
+    err_current_wallet_not_owner: "Current wallet is not a Safe owner",
+    err_not_enough_signatures: "Not enough valid owner signatures",
+    notice_safe_deploy_submitted: "Safe deployment submitted",
+    notice_safe_deployed_success: "Safe deployed successfully",
+    notice_signature_added: "Signature added",
+    notice_execution_broadcasted: "Execution broadcasted",
+    err_safe_deploy_failed_after_submit: "Safe deployment failed after submission",
+    err_deployment_failed: "Deployment failed",
+    err_owner_not_found: "Owner not found",
+    summary_safe_exec: "Safe Exec",
+    summary_proposal: "Proposal",
+    summary_deploy_safe: "Deploying Safe Vault",
+    summary_add_owner: "Add Owner",
+    summary_remove_owner: "Remove Owner",
+    summary_change_threshold: "Change Threshold"
   },
   settings: {
     title: "Settings",

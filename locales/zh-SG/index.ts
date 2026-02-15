@@ -57,6 +57,12 @@ export const zhSG: I18nSchema = {
     network_node_updated: "节点已更新",
     invalid_token_address: "代币地址无效。",
     token_already_exists: "该网络下代币已存在。"
+    ,
+    token_imported: "代币已导入",
+    token_import_failed: "代币导入失败。",
+    token_updated: "代币已更新",
+    token_removed: "代币已删除",
+    data_sync_fault: "数据同步故障"
   },
   tx: {
     send: "广播交易指令",
@@ -126,7 +132,27 @@ export const zhSG: I18nSchema = {
     op_proposed: "已提议",
     op_fault: "故障",
     op_access_denied: "无权限",
-    op_proposal_failed: "提议失败"
+    op_proposal_failed: "提议失败",
+    err_busy: "忙碌中...",
+    err_not_owner: "当前地址不是所有者",
+    err_proposal_failed: "提议失败",
+    err_signing_failed: "签名失败",
+    err_execution_failed: "执行失败",
+    err_current_wallet_not_owner: "当前钱包不是 Safe 所有者",
+    err_not_enough_signatures: "有效签名数量不足",
+    notice_safe_deploy_submitted: "部署交易已提交",
+    notice_safe_deployed_success: "Safe 部署成功",
+    notice_signature_added: "签名已添加",
+    notice_execution_broadcasted: "执行交易已广播",
+    err_safe_deploy_failed_after_submit: "提交后部署失败",
+    err_deployment_failed: "部署失败",
+    err_owner_not_found: "未找到该所有者",
+    summary_safe_exec: "Safe 执行",
+    summary_proposal: "提议",
+    summary_deploy_safe: "部署 Safe",
+    summary_add_owner: "添加成员",
+    summary_remove_owner: "移除成员",
+    summary_change_threshold: "修改阈值"
   },
   settings: {
     title: "设置",
