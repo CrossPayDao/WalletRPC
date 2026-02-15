@@ -7,6 +7,7 @@ import { useWalletState } from '../../features/wallet/hooks/useWalletState';
 import { useWalletData } from '../../features/wallet/hooks/useWalletData';
 import { useTransactionManager } from '../../features/wallet/hooks/useTransactionManager';
 import { useSafeManager } from '../../features/wallet/hooks/useSafeManager';
+import { LanguageProvider } from '../../contexts/LanguageContext';
 
 vi.mock('../../features/wallet/hooks/useWalletStorage', () => ({ useWalletStorage: vi.fn() }));
 vi.mock('../../features/wallet/hooks/useWalletState', () => ({ useWalletState: vi.fn() }));
@@ -126,7 +127,7 @@ const setupMocks = (activeAccountType: 'EOA' | 'SAFE', overrides: SetupOverrides
 describe('useEvmWallet handleSwitchNetwork', () => {
   it('SAFE 模式切链时重置为 EOA 并清空 activeSafeAddress', () => {
     const { stateMock } = setupMocks('SAFE');
-    const { result } = renderHook(() => useEvmWallet());
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
 
     act(() => {
       result.current.handleSwitchNetwork(1);
@@ -141,7 +142,7 @@ describe('useEvmWallet handleSwitchNetwork', () => {
 
   it('EOA 模式切链不会重复触发 SAFE 重置', () => {
     const { stateMock } = setupMocks('EOA');
-    const { result } = renderHook(() => useEvmWallet());
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
 
     act(() => {
       result.current.handleSwitchNetwork(1);
@@ -157,7 +158,7 @@ describe('useEvmWallet handleSwitchNetwork', () => {
   it('handleRefreshData 会触发强制刷新', () => {
     const { stateMock, dataMock } = setupMocks('EOA');
 
-    const { result } = renderHook(() => useEvmWallet());
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
     act(() => {
       result.current.handleRefreshData();
     });
@@ -173,7 +174,7 @@ describe('useEvmWallet handleSwitchNetwork', () => {
       chainId: 199
     };
     const { storageMock } = setupMocks('EOA', { trackedSafes: [existing] });
-    const { result } = renderHook(() => useEvmWallet());
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
 
     act(() => {
       result.current.handleTrackSafe('0x000000000000000000000000000000000000dead');
@@ -199,7 +200,7 @@ describe('useEvmWallet handleSwitchNetwork', () => {
       safeDetails: { owners: [], threshold: 2, nonce: 3 }
     });
 
-    renderHook(() => useEvmWallet());
+    renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
 
     expect(storageMock.setPendingSafeTxs).toHaveBeenCalled();
     const updater = storageMock.setPendingSafeTxs.mock.calls[0][0] as (prev: typeof pending) => typeof pending;

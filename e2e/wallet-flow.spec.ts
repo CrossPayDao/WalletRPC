@@ -62,7 +62,7 @@ test.describe('Wallet Flow (Mocked RPC)', () => {
     await page.getByPlaceholder('0x...').fill('0x00000000000000000000000000000000000000aa');
     await page.getByRole('button', { name: /IMPORT_TOKEN|IMPORT TOKEN|导入代币/i }).last().click();
 
-    await expect(page.getByText(/Imported MCK successfully/i)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Imported.*MCK|代币已导入.*MCK/i)).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/MOCK TOKEN|Mock Token/i).first()).toBeVisible();
 
     await page.getByText(/MOCK TOKEN|Mock Token/i).first().click();
