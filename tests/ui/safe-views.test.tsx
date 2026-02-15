@@ -197,10 +197,91 @@ describe('Safe views UI', () => {
       });
 
       await act(async () => {
-        vi.advanceTimersByTime(60000);
+        vi.advanceTimersByTime(180000);
         await Promise.resolve();
       });
       expect(screen.getByText('Scan timeout')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('SafeSettings 在阈值为 1 时会将连续成员变更请求排队并按顺序执行', async () => {
+    vi.useFakeTimers();
+    try {
+      const onAddOwner = vi.fn(async () => true);
+
+      const baseSafeDetails = {
+        owners: ['0x1111111111111111111111111111111111111111'],
+        threshold: 1,
+        nonce: 0
+      };
+
+      const ui = (
+        <SafeSettings
+          safeDetails={baseSafeDetails}
+          walletAddress="0x1111111111111111111111111111111111111111"
+          onRemoveOwner={vi.fn(async () => true)}
+          onAddOwner={onAddOwner}
+          onChangeThreshold={vi.fn(async () => true)}
+          onRefreshSafeDetails={vi.fn(async () => {})}
+          onBack={vi.fn()}
+        />
+      );
+
+      const { rerender } = wrap(ui);
+
+      // 第一次提议：进入 scanning，并触发一次广播回调
+      fireEvent.change(screen.getByPlaceholderText('0x...'), {
+        target: { value: '0x2222222222222222222222222222222222222222' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'PROPOSE' }));
+
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+        await Promise.resolve();
+      });
+      expect(onAddOwner).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Scanning...')).toBeInTheDocument();
+
+      // 第二次提议：应进入 queued，而不会立即触发广播
+      fireEvent.change(screen.getByPlaceholderText('0x...'), {
+        target: { value: '0x3333333333333333333333333333333333333333' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'PROPOSE' }));
+      expect(onAddOwner).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Queued')).toBeInTheDocument();
+
+      // 模拟第一次上链成功：owners 已包含第一个新增地址，队列应开始执行第二个请求
+      rerender(
+        <LanguageProvider>
+          <SafeSettings
+            safeDetails={{
+              ...baseSafeDetails,
+              owners: [
+                ...baseSafeDetails.owners,
+                '0x2222222222222222222222222222222222222222'
+              ]
+            }}
+            walletAddress="0x1111111111111111111111111111111111111111"
+            onRemoveOwner={vi.fn(async () => true)}
+            onAddOwner={onAddOwner}
+            onChangeThreshold={vi.fn(async () => true)}
+            onRefreshSafeDetails={vi.fn(async () => {})}
+            onBack={vi.fn()}
+          />
+        </LanguageProvider>
+      );
+
+      // flush effects, then run queued item building->syncing delay
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+        await Promise.resolve();
+      });
+      expect(onAddOwner).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
