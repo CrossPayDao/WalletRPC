@@ -50,7 +50,13 @@ export const zhSG: I18nSchema = {
     import_token: "导入代币",
     import_token_btn: "导入代币",
     custom: "自定义",
-    tron_node: "波场节点"
+    tron_node: "波场节点",
+    import_placeholder: "私钥 / 助记词",
+    badge_rpc_only: "仅 RPC",
+    badge_zero_telemetry: "零遥测",
+    network_node_updated: "节点已更新",
+    invalid_token_address: "代币地址无效。",
+    token_already_exists: "该网络下代币已存在。"
   },
   tx: {
     send: "广播交易指令",
@@ -110,7 +116,17 @@ export const zhSG: I18nSchema = {
     error_format: "格式无效",
     sig_required: "个签名",
     sigs_required: "个签名",
-    mod_btn: "修改权限"
+    mod_btn: "修改权限",
+    signed_label: "已签名",
+    to_label: "目标",
+    op_constructing: "构建中...",
+    op_broadcasting: "广播中...",
+    op_scanning: "扫描中...",
+    op_verified: "已验证",
+    op_proposed: "已提议",
+    op_fault: "故障",
+    op_access_denied: "无权限",
+    op_proposal_failed: "提议失败"
   },
   settings: {
     title: "设置",
@@ -134,6 +150,11 @@ export const zhSG: I18nSchema = {
     github_add: "通过 GitHub 永久添加",
     edit_token: "编辑代币",
     symbol: "符号",
-    decimals: "精度"
+    decimals: "精度",
+    rpc_required: "必须填写 RPC 地址。",
+    rpc_must_http: "RPC 地址必须以 http(s):// 开头。",
+    tron_rpc_validation_failed: "TRON RPC 校验失败",
+    save_failed: "保存失败",
+    no_explorers: "未配置区块浏览器。"
   }
 };

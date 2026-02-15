@@ -23,13 +23,13 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
   
   return (
     <div className={`
-      h-screen flex flex-col items-center p-6 bg-[#f8fafc] text-slate-900 relative overflow-y-auto scroll-smooth
+      min-h-[100svh] flex flex-col items-center p-6 bg-[#f8fafc] text-slate-900 relative overflow-y-auto scroll-smooth
       transition-all duration-1000 ease-in-out
       ${isExiting ? 'opacity-0 scale-105 filter blur-md bg-white' : 'opacity-100 scale-100'}
     `}>
       
       {/* 语言切换悬浮按钮 */}
-      <div className="absolute top-8 right-8 z-50 flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+      <div className="fixed top-4 right-4 sm:top-8 sm:right-8 z-50 flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
          <button 
            onClick={() => setLanguage('en')}
            className={`px-3 py-1 text-[10px] font-black rounded-full transition-all ${language === 'en' ? 'bg-[#0062ff] text-white' : 'text-slate-400'}`}
@@ -72,7 +72,7 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
              <div className="space-y-6">
                <textarea
                  className="w-full p-4 bg-slate-50 border border-slate-200 focus:border-[#0062ff]/50 rounded-xl font-mono text-base text-slate-900 outline-none transition-all resize-none shadow-inner"
-                 placeholder="Private Key / Mnemonic"
+                 placeholder={t('wallet.import_placeholder')}
                  rows={3}
                  value={input}
                  onChange={(e) => setInput(e.target.value)}
@@ -103,8 +103,8 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
              {t('wallet.disclaimer')}
           </p>
           <div className="flex items-center justify-center space-x-6 text-[10px] text-slate-400 font-bold uppercase">
-             <span className="flex items-center"><ShieldCheck className="w-3 h-3 mr-1 text-[#0062ff]" /> AES-256</span>
-             <span className="flex items-center text-red-400"><Globe className="w-3 h-3 mr-1" /> SG_SERVER</span>
+             <span className="flex items-center"><ShieldCheck className="w-3 h-3 mr-1 text-[#0062ff]" /> {t('wallet.badge_rpc_only')}</span>
+             <span className="flex items-center"><Globe className="w-3 h-3 mr-1" /> {t('wallet.badge_zero_telemetry')}</span>
           </div>
         </div>
       </div>

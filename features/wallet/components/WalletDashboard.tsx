@@ -53,9 +53,19 @@ export const WalletDashboard: React.FC<WalletDashboardProps> = ({
   const handleCopy = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (address) {
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      try {
+        const clip = navigator.clipboard;
+        if (clip && typeof clip.writeText === 'function') {
+          clip.writeText(address);
+        } else {
+          // Fallback for older / restricted environments (user can copy manually).
+          window.prompt('Copy address:', address);
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      } catch {
+        window.prompt('Copy address:', address);
+      }
     }
   };
 

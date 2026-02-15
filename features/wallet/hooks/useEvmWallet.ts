@@ -8,6 +8,7 @@ import { useTransactionManager } from './useTransactionManager';
 import { useSafeManager } from './useSafeManager';
 import { ChainConfig, TokenConfig } from '../types';
 import { ERC20_ABI } from '../config';
+import { useTranslation } from '../../../contexts/LanguageContext';
 
 /**
  * 【核心技术：带缓存的智能 RPC 提供者 (Memoized RPC Provider)】
@@ -87,6 +88,7 @@ class DeduplicatingJsonRpcProvider extends ethers.JsonRpcProvider {
 }
 
 export const useEvmWallet = () => {
+  const { t } = useTranslation();
   const storage = useWalletStorage();
   const { 
     trackedSafes, setTrackedSafes, chains, setChains, 
@@ -192,7 +194,7 @@ export const useEvmWallet = () => {
   const handleSaveChain = (config: ChainConfig) => {
     setChains(prev => prev.map(c => c.id === config.id ? { ...config, isCustom: true } : c));
     setIsChainModalOpen(false);
-    setNotification("Network node updated");
+    setNotification(t('wallet.network_node_updated'));
   };
 
   const handleTrackSafe = (address: string) => {
@@ -234,12 +236,12 @@ export const useEvmWallet = () => {
   const confirmAddToken = async (address: string) => {
     if (!provider || !address) return;
     if (!ethers.isAddress(address)) {
-      setError("Invalid token address.");
+      setError(t('wallet.invalid_token_address'));
       return;
     }
     const normalized = address.toLowerCase();
     if (activeChainTokens.some(t => t.address.toLowerCase() === normalized)) {
-      setError("Token already exists on this network.");
+      setError(t('wallet.token_already_exists'));
       return;
     }
     setIsLoading(true);

@@ -79,7 +79,7 @@ export const SafeQueue: React.FC<SafeQueueProps> = ({
                      </div>
                      <div>
                        <h3 className="font-bold text-slate-800 text-sm">{tx.summary}</h3>
-                       <p className="text-xs text-slate-400 font-mono mt-0.5">To: {tx.to.slice(0,10)}...{tx.to.slice(-8)}</p>
+                       <p className="text-xs text-slate-400 font-mono mt-0.5">{t('safe.to_label')}: {tx.to.slice(0,10)}...{tx.to.slice(-8)}</p>
                      </div>
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide border ${canExecute ? 'bg-green-50 text-green-700 border-green-100' : 'bg-amber-50 text-amber-700 border-amber-100'}`}>
@@ -96,7 +96,7 @@ export const SafeQueue: React.FC<SafeQueueProps> = ({
 
                 <div className="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
                   <div className="flex items-center space-x-1">
-                    <span className="text-xs text-slate-500 mr-2 font-medium">Signed:</span>
+                    <span className="text-xs text-slate-500 mr-2 font-medium">{t('safe.signed_label')}:</span>
                     {Object.keys(tx.signatures).map(addr => (
                       <div key={addr} className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center" title={addr}>
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -216,7 +216,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     if (displayOwners.some(o => o.address.toLowerCase() === target && o.step !== 'idle')) return;
     setNewOwnerInput(''); 
     setOptimisticOps(prev => [...prev, { address: target, type: 'add', step: 'building' }]);
-    if (!isOwner) { updateOpStatus(target, 'add', { step: 'error', error: "Access Denied" }); return; }
+    if (!isOwner) { updateOpStatus(target, 'add', { step: 'error', error: t('safe.op_access_denied') }); return; }
     await new Promise(r => setTimeout(r, 600));
     updateOpStatus(target, 'add', { step: 'syncing' });
     try {
@@ -225,7 +225,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
         if (safeDetails.threshold === 1) updateOpStatus(target, 'add', { step: 'verifying' });
         else { updateOpStatus(target, 'add', { step: 'success' }); setTimeout(() => clearOp(target, 'add'), 3000); }
       } else {
-        updateOpStatus(target, 'add', { step: 'error', error: 'Proposal failed' });
+        updateOpStatus(target, 'add', { step: 'error', error: t('safe.op_proposal_failed') });
       }
     } catch (e: any) { updateOpStatus(target, 'add', { step: 'error', error: e.message }); }
   };
@@ -234,7 +234,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     const target = owner.toLowerCase();
     if (optimisticOps.some(op => op.address.toLowerCase() === target && op.step !== 'idle')) return;
     setOptimisticOps(prev => [...prev, { address: target, type: 'remove', step: 'building' }]);
-    if (!isOwner) { updateOpStatus(target, 'remove', { step: 'error', error: "Access Denied" }); return; }
+    if (!isOwner) { updateOpStatus(target, 'remove', { step: 'error', error: t('safe.op_access_denied') }); return; }
     await new Promise(r => setTimeout(r, 600));
     updateOpStatus(target, 'remove', { step: 'syncing' });
     try {
@@ -245,7 +245,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
         if (safeDetails.threshold === 1) updateOpStatus(target, 'remove', { step: 'verifying' });
         else { updateOpStatus(target, 'remove', { step: 'success' }); setTimeout(() => clearOp(target, 'remove'), 2000); }
       } else {
-        updateOpStatus(target, 'remove', { step: 'error', error: 'Proposal failed' });
+        updateOpStatus(target, 'remove', { step: 'error', error: t('safe.op_proposal_failed') });
       }
     } catch (e: any) { updateOpStatus(target, 'remove', { step: 'error', error: e.message }); }
   };
@@ -287,11 +287,11 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
                        </div>
                        <div className="flex-1 min-w-0">
                           <div className={`text-[10px] font-black uppercase tracking-[0.2em] mb-0.5 truncate ${step === 'error' ? 'text-red-600' : (step === 'verifying' ? 'text-[#0062ff]' : 'text-slate-400')}`}>
-                             {step === 'building' && "Constructing..."}
-                             {step === 'syncing' && "Broadcasting..."}
-                             {step === 'verifying' && "Scanning..."}
-                             {step === 'success' && (safeDetails.threshold === 1 ? "Verified" : "Proposed")}
-                             {step === 'error' && (item.error || "Fault")}
+                             {step === 'building' && t('safe.op_constructing')}
+                             {step === 'syncing' && t('safe.op_broadcasting')}
+                             {step === 'verifying' && t('safe.op_scanning')}
+                             {step === 'success' && (safeDetails.threshold === 1 ? t('safe.op_verified') : t('safe.op_proposed'))}
+                             {step === 'error' && (item.error || t('safe.op_fault'))}
                           </div>
                        </div>
                        {(step === 'error' || step === 'success') && <button onClick={() => clearOp(item.address, item.opType)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-4 h-4" /></button>}

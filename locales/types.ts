@@ -27,6 +27,12 @@ export interface I18nSchema {
     deplo_new: string; import: string; active_key: string; total_net_worth: string;
     operational_logs: string; no_logs: string; asset_inventory: string;
     import_token: string; import_token_btn: string; custom: string; tron_node: string;
+    import_placeholder: string;
+    badge_rpc_only: string;
+    badge_zero_telemetry: string;
+    network_node_updated: string;
+    invalid_token_address: string;
+    token_already_exists: string;
   };
   tx: {
     send: string; send_btn: string; recipient: string; amount: string;
@@ -49,6 +55,16 @@ export interface I18nSchema {
     track_title: string; initiate_sync: string; error_empty: string; error_prefix: string;
     error_length: string; error_format: string; sig_required: string; sigs_required: string;
     mod_btn: string;
+    signed_label: string;
+    to_label: string;
+    op_constructing: string;
+    op_broadcasting: string;
+    op_scanning: string;
+    op_verified: string;
+    op_proposed: string;
+    op_fault: string;
+    op_access_denied: string;
+    op_proposal_failed: string;
   };
   settings: {
     title: string; subtitle: string; current_network: string; rpc_connection: string;
@@ -57,5 +73,10 @@ export interface I18nSchema {
     currency: string; contribute: string; add_custom_token: string; local_storage_hint: string;
     contract_address: string; import_token_btn: string; github_add: string; edit_token: string;
     symbol: string; decimals: string;
+    rpc_required: string;
+    rpc_must_http: string;
+    tron_rpc_validation_failed: string;
+    save_failed: string;
+    no_explorers: string;
   };
 }

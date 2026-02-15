@@ -50,7 +50,13 @@ export const en: I18nSchema = {
     import_token: "IMPORT_TOKEN",
     import_token_btn: "IMPORT_TOKEN",
     custom: "Custom",
-    tron_node: "Tron_Node"
+    tron_node: "Tron_Node",
+    import_placeholder: "Private Key / Mnemonic",
+    badge_rpc_only: "RPC_ONLY",
+    badge_zero_telemetry: "ZERO_TELEMETRY",
+    network_node_updated: "Network node updated",
+    invalid_token_address: "Invalid token address.",
+    token_already_exists: "Token already exists on this network."
   },
   tx: {
     send: "Broadcast Transaction",
@@ -110,7 +116,17 @@ export const en: I18nSchema = {
     error_format: "Invalid format",
     sig_required: "Signature Required",
     sigs_required: "Signatures Required",
-    mod_btn: "SAFE_MOD"
+    mod_btn: "SAFE_MOD",
+    signed_label: "Signed",
+    to_label: "To",
+    op_constructing: "Constructing...",
+    op_broadcasting: "Broadcasting...",
+    op_scanning: "Scanning...",
+    op_verified: "Verified",
+    op_proposed: "Proposed",
+    op_fault: "Fault",
+    op_access_denied: "Access Denied",
+    op_proposal_failed: "Proposal failed"
   },
   settings: {
     title: "Settings",
@@ -134,6 +150,11 @@ export const en: I18nSchema = {
     github_add: "Add permanently via GitHub",
     edit_token: "Edit Token",
     symbol: "Symbol",
-    decimals: "Decimals"
+    decimals: "Decimals",
+    rpc_required: "RPC URL is required.",
+    rpc_must_http: "RPC URL must start with http(s)://",
+    tron_rpc_validation_failed: "TRON RPC validation failed",
+    save_failed: "Save failed",
+    no_explorers: "No explorers configured."
   }
 };

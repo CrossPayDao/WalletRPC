@@ -21,7 +21,7 @@ const ParticleIntro = React.lazy(() => import('../../components/ui/ParticleIntro
 const TechAlert: React.FC<{ type: 'error' | 'success'; message: string; onClose?: () => void }> = ({ type, message, onClose }) => (
   <div className={`
     fixed top-20 left-1/2 transform -translate-x-1/2 z-[100]
-    flex items-center px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md animate-tech-in min-w-[320px]
+    flex items-center px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md animate-tech-in w-[min(420px,90vw)]
     ${type === 'error' ? 'bg-white border-red-500 text-red-700' : 'bg-white border-[#0062ff] text-[#0062ff]'}
   `}>
     <div className="flex-shrink-0 mr-3">
@@ -37,7 +37,7 @@ const TechAlert: React.FC<{ type: 'error' | 'success'; message: string; onClose?
 );
 
 const NotificationToast: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => (
-  <div className="fixed top-6 right-6 z-[100] animate-tech-in max-w-[90vw]">
+  <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[100] animate-tech-in max-w-[90vw]">
     <div className="bg-white/90 text-slate-900 px-5 py-4 rounded-xl shadow-2xl flex items-center border border-slate-200 backdrop-blur-md">
       <Bell className="w-5 h-5 text-[#0062ff] mr-3 flex-shrink-0" />
       <span className="text-[10px] font-black uppercase tracking-widest mr-6 truncate">{message}</span>
@@ -113,14 +113,14 @@ export const WalletApp: React.FC = () => {
   if (view === 'onboarding' || !wallet) return <WalletOnboarding input={privateKeyOrPhrase} setInput={setPrivateKeyOrPhrase} onImport={onImportWrapper} error={error} isExiting={isOnboardingExiting} />;
   if (view === 'intro_animation') {
     return (
-      <React.Suspense fallback={<div className="h-screen bg-[#f8fafc]" />}>
+      <React.Suspense fallback={<div className="min-h-[100svh] bg-[#f8fafc]" />}>
         <ParticleIntro fadeOut={isIntroFadingOut} />
       </React.Suspense>
     );
   }
 
   return (
-    <div className="h-screen bg-[#f8fafc] text-slate-900 font-sans flex flex-col animate-in fade-in duration-700 overflow-hidden">
+    <div className="min-h-[100svh] bg-[#f8fafc] text-slate-900 font-sans flex flex-col animate-in fade-in duration-700 overflow-hidden">
       <header className="bg-white/80 border-b border-slate-200 sticky top-0 z-40 px-4 md:px-8 h-16 flex items-center justify-between shadow-sm backdrop-blur-md flex-shrink-0">
          <div className="flex items-center space-x-4">
              <div className="hidden lg:flex items-center mr-4 border-r border-slate-100 pr-6">

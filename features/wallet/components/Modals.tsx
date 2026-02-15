@@ -32,6 +32,14 @@ export const ChainModal: React.FC<ChainModalProps> = ({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  const safeHostname = (url: string): string => {
+    try {
+      return new URL(url).hostname || t('common.unknown');
+    } catch {
+      return t('common.unknown');
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
       setConfig(initialConfig);
@@ -52,11 +60,11 @@ export const ChainModal: React.FC<ChainModalProps> = ({
 
     const rpcUrlRaw = String(resolvedConfig.defaultRpcUrl || '').trim();
     if (!rpcUrlRaw) {
-      setSaveError('RPC URL is required.');
+      setSaveError(t('settings.rpc_required'));
       return;
     }
     if (!isHttpUrl(rpcUrlRaw)) {
-      setSaveError('RPC URL must start with http(s)://');
+      setSaveError(t('settings.rpc_must_http'));
       return;
     }
 
@@ -73,7 +81,7 @@ export const ChainModal: React.FC<ChainModalProps> = ({
         if (resolvedConfig.chainType === 'TRON') {
           const probe = await TronService.probeRpc(tronNormalized);
           if (!probe.ok) {
-            setSaveError(`TRON RPC validation failed: ${probe.error || 'unknown error'}`);
+            setSaveError(`${t('settings.tron_rpc_validation_failed')}: ${probe.error || t('common.unknown')}`);
             return;
           }
         } else {
@@ -92,7 +100,7 @@ export const ChainModal: React.FC<ChainModalProps> = ({
       onClose();
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      setSaveError(msg || 'Save failed');
+      setSaveError(msg || t('settings.save_failed'));
     } finally {
       setIsSaving(false);
     }
@@ -134,8 +142,12 @@ export const ChainModal: React.FC<ChainModalProps> = ({
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                <div>
                  <label className="text-xs font-bold text-slate-500 block mb-2">{t('settings.select_node')}</label>
-                 <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium outline-none" value={rpcMode === 'custom' ? 'custom' : config.defaultRpcUrl} onChange={(e) => { const val = e.target.value; if (val === 'custom') setRpcMode('custom'); else { setRpcMode('preset'); setConfig({ ...config, defaultRpcUrl: val }); } }}>
-                    {initialConfig.publicRpcUrls?.map((url, idx) => <option key={url} value={url}>Public Node {idx + 1} ({new URL(url).hostname})</option>)}
+               <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium outline-none" value={rpcMode === 'custom' ? 'custom' : config.defaultRpcUrl} onChange={(e) => { const val = e.target.value; if (val === 'custom') setRpcMode('custom'); else { setRpcMode('preset'); setConfig({ ...config, defaultRpcUrl: val }); } }}>
+                    {initialConfig.publicRpcUrls?.map((url, idx) => (
+                      <option key={url} value={url}>
+                        Public Node {idx + 1} ({safeHostname(url)})
+                      </option>
+                    ))}
                     <option value="custom">{t('settings.custom_rpc')}</option>
                  </select>
                </div>
@@ -163,7 +175,7 @@ export const ChainModal: React.FC<ChainModalProps> = ({
                    </select>
                    {activeExplorer && activeExplorer.url && <a href={activeExplorer.url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-indigo-600 hover:text-indigo-800 font-medium"><span>{t('settings.open_website')}</span><ExternalLink className="w-3 h-3 ml-1" /></a>}
                  </div>
-               ) : <div className="text-sm text-slate-400 italic">No explorers configured.</div>}
+               ) : <div className="text-sm text-slate-400 italic">{t('settings.no_explorers')}</div>}
             </div>
           </div>
 
