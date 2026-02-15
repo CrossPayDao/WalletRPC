@@ -98,17 +98,17 @@ export const useEvmWallet = () => {
   const { t } = useTranslation();
   const storage = useWalletStorage();
   const { 
-    trackedSafes, setTrackedSafes, chains, setChains, 
-    customTokens, setCustomTokens, pendingSafeTxs, setPendingSafeTxs 
+    setTrackedSafes, chains, setChains, 
+    customTokens, setCustomTokens, setPendingSafeTxs 
   } = storage;
   
   const initialChainId = chains.length > 0 ? chains[0].id : 1;
   const state = useWalletState(initialChainId);
   const { 
     wallet, tronPrivateKey, activeAccountType, setActiveAccountType, activeSafeAddress, setActiveSafeAddress,
-    activeChainId, setActiveChainId, view, setView, error, setError, notification, setNotification,
-    tokenToEdit, setTokenToEdit, isChainModalOpen, setIsChainModalOpen, isAddTokenModalOpen, setIsAddTokenModalOpen,
-    handleImport, clearSession, privateKeyOrPhrase, setPrivateKeyOrPhrase, setWallet, isMenuOpen, setIsMenuOpen, isLoading, setIsLoading,
+    activeChainId, setActiveChainId, view, setView, setError, setNotification,
+    setTokenToEdit, setIsChainModalOpen, setIsAddTokenModalOpen,
+    clearSession, setIsMenuOpen, setIsLoading,
   } = state;
 
   const activeChain = useMemo(() => {
@@ -144,7 +144,7 @@ export const useEvmWallet = () => {
     activeChainTokens, provider, setIsLoading, setError
   });
 
-  const { fetchData, balance, tokenBalances, safeDetails } = dataLayer;
+  const { fetchData, safeDetails } = dataLayer;
 
   const safeHandlerRef = useRef<any>(null);
   const txMgr = useTransactionManager({
@@ -162,7 +162,7 @@ export const useEvmWallet = () => {
   const safeMgr = useSafeManager({
     wallet, activeSafeAddress, activeChainId, activeChain, provider, safeDetails,
     setPendingSafeTxs, setTrackedSafes, setActiveAccountType, setActiveSafeAddress,
-    setView, setNotification, setError, syncNonce: txMgr.syncNonce,
+    setView, setNotification, setError,
     addTransactionRecord: txMgr.addTransactionRecord
   });
 
