@@ -7,6 +7,7 @@ import { handleTxError, normalizeHex } from '../utils';
 import { TronService } from '../../../services/tronService';
 import { ERC20_ABI } from '../config';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { devError } from '../../../services/logger';
 
 export interface ProcessResult {
   success: boolean;
@@ -134,7 +135,7 @@ export const useTransactionManager = ({
       const n = await provider.getTransactionCount(wallet.address, 'pending');
       localNonceRef.current = n;
     } catch (e) {
-      console.error("Nonce sync failed", e);
+      devError("Nonce sync failed", e);
     } finally {
       isSyncingRef.current = false;
     }

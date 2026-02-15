@@ -37,7 +37,6 @@ export const getExplorerAddressLink = (chain: ChainConfig, address: string) => {
 };
 
 export const handleTxError = (e: any, t?: (key: string) => string) => {
-  console.error(e);
   if (typeof e === 'string') return e;
 
   const primaryMsg: string = String(e?.shortMessage || e?.message || '');

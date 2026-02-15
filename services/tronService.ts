@@ -1,6 +1,7 @@
 
 import { ethers } from 'ethers';
 import bs58 from 'bs58';
+import { devError } from './logger';
 
 const bytesToHex = (bytes: ArrayLike<number>): string => {
   return `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
@@ -132,7 +133,7 @@ export const TronService = {
       );
       return BigInt(account.balance || 0);
     } catch (e) { 
-      console.error("Tron getBalance failed", e);
+      devError("Tron getBalance failed", e);
       return 0n; 
     }
   },
@@ -160,7 +161,7 @@ export const TronService = {
       }
       return 0n;
     } catch (e) {
-      console.error("TRC20 balance fetch failed", e);
+      devError("TRC20 balance fetch failed", e);
       return 0n;
     }
   },
@@ -251,7 +252,7 @@ export const TronService = {
         return { success: false, error: decoded || String(raw) };
       }
     } catch (e: any) {
-      console.error("TRON send failed", e);
+      devError("TRON send failed", e);
       return { success: false, error: e.message };
     }
   },

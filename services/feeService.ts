@@ -1,5 +1,6 @@
 
 import { ethers } from 'ethers';
+import { devWarn } from './logger';
 
 /**
  * 【设计亮点：原子化请求去重 (Request Deduplication)】
@@ -52,7 +53,7 @@ export const FeeService = {
         feeCache.set(cacheKey, { data, timestamp: Date.now() });
         return data;
       } catch (e) {
-        console.warn("Fee fetch failed, fallback to defaults", e);
+        devWarn("Fee fetch failed, fallback to defaults", e);
         return new ethers.FeeData(); 
       } finally {
         // 请求完成（无论成功失败），释放锁定

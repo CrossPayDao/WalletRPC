@@ -41,13 +41,11 @@ describe('FeeService', () => {
         throw new Error('rpc down');
       })
     } as unknown as ethers.JsonRpcProvider;
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const result = await FeeService.getOptimizedFeeData(provider, 9999);
     expect(result.gasPrice).toBeNull();
     expect(result.maxFeePerGas).toBeNull();
     expect(result.maxPriorityFeePerGas).toBeNull();
-    expect(warnSpy).toHaveBeenCalled();
   });
 
   it('buildOverrides 优先使用 EIP-1559 并放大 fee', () => {
