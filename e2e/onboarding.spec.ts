@@ -16,7 +16,8 @@ test.describe('Wallet RPC Onboarding', () => {
     const zhConfirm = page.getByRole('button', { name: '确认' });
     await expect(zhConfirm).toBeVisible();
 
-    await page.getByPlaceholder('Private Key / Mnemonic').fill('invalid mnemonic');
+    await expect(page.getByPlaceholder('私钥 / 助记词')).toBeVisible();
+    await page.locator('textarea').fill('invalid mnemonic');
     await expect(zhConfirm).toBeEnabled();
     await zhConfirm.click();
     await expect(page.getByText('Invalid Key/Mnemonic')).toBeVisible();
