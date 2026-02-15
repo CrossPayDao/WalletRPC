@@ -100,4 +100,29 @@ describe('useWalletStorage', () => {
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
+
+  it('localStorage 不可用时不应崩溃，且状态更新仍能生效', async () => {
+    const getSpy = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+    const setSpy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('denied');
+    });
+
+    const { result } = renderHook(() => useWalletStorage());
+
+    act(() => {
+      result.current.setTrackedSafes([
+        { address: '0x000000000000000000000000000000000000dEaD', name: 'Safe_dead', chainId: DEFAULT_CHAINS[0].id }
+      ]);
+    });
+
+    await waitFor(() => {
+      expect(result.current.trackedSafes).toHaveLength(1);
+      expect(result.current.trackedSafes[0].name).toBe('Safe_dead');
+    });
+
+    getSpy.mockRestore();
+    setSpy.mockRestore();
+  });
 });

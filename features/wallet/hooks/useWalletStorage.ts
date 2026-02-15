@@ -16,8 +16,24 @@ export const useWalletStorage = () => {
   const [customTokens, setCustomTokens] = useState<Record<number, TokenConfig[]>>({});
   const [pendingSafeTxs, setPendingSafeTxs] = useState<SafePendingTx[]>([]);
 
+  const safeGetItem = (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+
+  const safeSetItem = (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // ignore (private mode / denied access)
+    }
+  };
+
   const parseStorageItem = <T,>(key: string, fallback: T): T => {
-    const raw = localStorage.getItem(key);
+    const raw = safeGetItem(key);
     if (!raw) return fallback;
     try {
       return JSON.parse(raw) as T;
@@ -81,20 +97,20 @@ export const useWalletStorage = () => {
   // --- 自动保存触发器 ---
   // 这种模式确保了“UI 状态即存储状态”，开发者无需手动调用 save()
   useEffect(() => {
-    localStorage.setItem('zerostate_tracked_safes', JSON.stringify(trackedSafes));
+    safeSetItem('zerostate_tracked_safes', JSON.stringify(trackedSafes));
   }, [trackedSafes]);
 
   useEffect(() => {
      const chainsToSave = chains.filter(c => c.isCustom);
-     localStorage.setItem('zerostate_custom_chains', JSON.stringify(chainsToSave));
+     safeSetItem('zerostate_custom_chains', JSON.stringify(chainsToSave));
   }, [chains]);
 
   useEffect(() => {
-     localStorage.setItem('zerostate_custom_tokens', JSON.stringify(customTokens));
+     safeSetItem('zerostate_custom_tokens', JSON.stringify(customTokens));
   }, [customTokens]);
 
   useEffect(() => {
-     localStorage.setItem('zerostate_pending_safe_txs', JSON.stringify(pendingSafeTxs));
+     safeSetItem('zerostate_pending_safe_txs', JSON.stringify(pendingSafeTxs));
   }, [pendingSafeTxs]);
 
   return { trackedSafes, setTrackedSafes, chains, setChains, customTokens, setCustomTokens, pendingSafeTxs, setPendingSafeTxs };
