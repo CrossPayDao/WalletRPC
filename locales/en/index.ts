@@ -178,6 +178,7 @@ export const en: I18nSchema = {
     op_constructing: "Constructing...",
     op_broadcasting: "Broadcasting...",
     op_scanning: "Scanning...",
+    op_timeout: "Scan timeout",
     op_verified: "Verified",
     op_proposed: "Proposed",
     op_fault: "Fault",

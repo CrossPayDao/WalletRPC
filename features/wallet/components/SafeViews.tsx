@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { List, Key, Zap, Trash2, ArrowLeft, Users, Shield, Plus, Clock, AlertCircle, Loader2, CheckCircle2, ShieldOff, X, ChevronDown, Activity } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { SafePendingTx, SafeDetails } from '../types';
@@ -129,7 +129,7 @@ export const SafeQueue: React.FC<SafeQueueProps> = ({
   );
 };
 
-type ProcessStep = 'idle' | 'building' | 'syncing' | 'verifying' | 'success' | 'vanishing' | 'error';
+type ProcessStep = 'idle' | 'building' | 'syncing' | 'verifying' | 'timeout' | 'success' | 'vanishing' | 'error';
 type OpType = 'add' | 'remove';
 
 interface OptimisticOp {
@@ -138,6 +138,8 @@ interface OptimisticOp {
   step: ProcessStep;
   error?: string;
 }
+
+const VERIFY_TIMEOUT_MS = 60_000;
 
 interface SafeSettingsProps {
   safeDetails: SafeDetails;
@@ -160,6 +162,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   const [newOwnerInput, setNewOwnerInput] = useState('');
   const [newThresholdSelect, setNewThresholdSelect] = useState(safeDetails.threshold);
   const [optimisticOps, setOptimisticOps] = useState<OptimisticOp[]>([]);
+  const verifyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const isOwner = useMemo(() => {
     if (!walletAddress) return false;
@@ -167,15 +170,60 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   }, [safeDetails.owners, walletAddress]);
 
   useEffect(() => {
+    const makeKey = (op: { address: string; type: OpType }) => `${op.type}:${op.address.toLowerCase()}`;
+    const activeKeys = new Set(optimisticOps.map(makeKey));
+
+    // 清理被移除的 op timer
+    for (const [key, timer] of verifyTimeoutsRef.current.entries()) {
+      if (!activeKeys.has(key)) {
+        clearTimeout(timer);
+        verifyTimeoutsRef.current.delete(key);
+      }
+    }
+
+    // 为 verifying 状态建立超时阶段（避免永久扫描）
+    for (const op of optimisticOps) {
+      const key = makeKey(op);
+      if (op.step === 'verifying') {
+        if (verifyTimeoutsRef.current.has(key)) continue;
+        const timer = setTimeout(() => {
+          setOptimisticOps((prev) =>
+            prev.map((p) => {
+              const pKey = makeKey(p);
+              if (pKey !== key) return p;
+              if (p.step !== 'verifying') return p;
+              return { ...p, step: 'timeout' };
+            })
+          );
+        }, VERIFY_TIMEOUT_MS);
+        verifyTimeoutsRef.current.set(key, timer);
+      } else {
+        const timer = verifyTimeoutsRef.current.get(key);
+        if (timer) {
+          clearTimeout(timer);
+          verifyTimeoutsRef.current.delete(key);
+        }
+      }
+    }
+  }, [optimisticOps]);
+
+  useEffect(() => {
+    return () => {
+      for (const timer of verifyTimeoutsRef.current.values()) clearTimeout(timer);
+      verifyTimeoutsRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     const currentAddrs = safeDetails.owners.map(o => o.toLowerCase());
     setOptimisticOps(prev => {
       let changed = false;
       const next = prev.map(op => {
         const addrLower = op.address.toLowerCase();
-        if (op.type === 'remove' && op.step === 'verifying' && !currentAddrs.includes(addrLower)) {
+        if (op.type === 'remove' && (op.step === 'verifying' || op.step === 'timeout') && !currentAddrs.includes(addrLower)) {
           changed = true; return { ...op, step: 'vanishing' as const };
         }
-        if (op.type === 'add' && op.step === 'verifying' && currentAddrs.includes(addrLower)) {
+        if (op.type === 'add' && (op.step === 'verifying' || op.step === 'timeout') && currentAddrs.includes(addrLower)) {
           changed = true; return { ...op, step: 'vanishing' as const };
         }
         return op;
@@ -276,28 +324,30 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
             return (
               <div key={`${item.address}-${item.opType}`} className={`p-4 flex justify-between items-center transition-all duration-500 group relative overflow-hidden ${item.isPending ? 'bg-green-50/10' : 'hover:bg-slate-50'}`}>
                 {step !== 'idle' && (
-                  <div className={`absolute inset-0 z-10 flex items-center px-4 animate-in fade-in duration-300 ${step === 'error' ? 'bg-red-50/95' : 'bg-white/90 backdrop-blur-[1px]'}`}>
-                    <div className="flex items-center space-x-3 w-full">
-                       <div className="w-8 h-8 flex items-center justify-center">
-                          {step === 'building' && <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />}
-                          {step === 'syncing' && <Zap className="w-5 h-5 text-amber-500 animate-pulse" />}
-                          {step === 'verifying' && <Activity className="w-5 h-5 text-[#0062ff] animate-[pulse_1.5s_infinite]" />}
-                          {step === 'success' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
-                          {step === 'error' && <ShieldOff className="w-5 h-5 text-red-500 animate-shake" />}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                          <div className={`text-[10px] font-black uppercase tracking-[0.2em] mb-0.5 truncate ${step === 'error' ? 'text-red-600' : (step === 'verifying' ? 'text-[#0062ff]' : 'text-slate-400')}`}>
-                             {step === 'building' && t('safe.op_constructing')}
-                             {step === 'syncing' && t('safe.op_broadcasting')}
-                             {step === 'verifying' && t('safe.op_scanning')}
-                             {step === 'success' && (safeDetails.threshold === 1 ? t('safe.op_verified') : t('safe.op_proposed'))}
-                             {step === 'error' && (item.error || t('safe.op_fault'))}
-                          </div>
-                       </div>
-                       {(step === 'error' || step === 'success') && <button onClick={() => clearOp(item.address, item.opType)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-4 h-4" /></button>}
-                    </div>
-                  </div>
-                )}
+	                  <div className={`absolute inset-0 z-10 flex items-center px-4 animate-in fade-in duration-300 ${step === 'error' ? 'bg-red-50/95' : 'bg-white/90 backdrop-blur-[1px]'}`}>
+	                    <div className="flex items-center space-x-3 w-full">
+	                       <div className="w-8 h-8 flex items-center justify-center">
+	                          {step === 'building' && <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />}
+	                          {step === 'syncing' && <Zap className="w-5 h-5 text-amber-500 animate-pulse" />}
+	                          {step === 'verifying' && <Activity className="w-5 h-5 text-[#0062ff] animate-[pulse_1.5s_infinite]" />}
+	                          {step === 'timeout' && <AlertCircle className="w-5 h-5 text-amber-500 animate-pulse" />}
+	                          {step === 'success' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
+	                          {step === 'error' && <ShieldOff className="w-5 h-5 text-red-500 animate-shake" />}
+	                       </div>
+	                       <div className="flex-1 min-w-0">
+	                          <div className={`text-[10px] font-black uppercase tracking-[0.2em] mb-0.5 truncate ${step === 'error' ? 'text-red-600' : (step === 'verifying' ? 'text-[#0062ff]' : (step === 'timeout' ? 'text-amber-600' : 'text-slate-400'))}`}>
+	                             {step === 'building' && t('safe.op_constructing')}
+	                             {step === 'syncing' && t('safe.op_broadcasting')}
+	                             {step === 'verifying' && t('safe.op_scanning')}
+	                             {step === 'timeout' && t('safe.op_timeout')}
+	                             {step === 'success' && (safeDetails.threshold === 1 ? t('safe.op_verified') : t('safe.op_proposed'))}
+	                             {step === 'error' && (item.error || t('safe.op_fault'))}
+	                          </div>
+	                       </div>
+	                       {(step === 'error' || step === 'success' || step === 'timeout') && <button onClick={() => clearOp(item.address, item.opType)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-4 h-4" /></button>}
+	                    </div>
+	                  </div>
+	                )}
                 <div className="flex items-center min-w-0 flex-1">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black mr-3 flex-shrink-0 transition-colors ${item.isPending ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>{item.isPending ? <Plus className="w-3.5 h-3.5" /> : (idx + 1)}</div>
                   <span className={`font-mono text-sm truncate tracking-tight ${item.isPending ? 'text-green-700 italic font-bold' : 'text-slate-600'}`}>{item.address}</span>

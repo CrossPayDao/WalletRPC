@@ -1,6 +1,6 @@
 import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LanguageProvider } from '../../contexts/LanguageContext';
 import { CreateSafe, SafeQueue, SafeSettings, TrackSafe } from '../../features/wallet/components/SafeViews';
@@ -155,6 +155,52 @@ describe('Safe views UI', () => {
 
     expect(await screen.findByText('Proposal failed', {}, { timeout: 2000 })).toBeInTheDocument();
     expect(onAddOwner).toHaveBeenCalledTimes(1);
+  });
+
+  it('SafeSettings 在扫描过久时应进入超时阶段（避免永久扫描）', async () => {
+    vi.useFakeTimers();
+    try {
+      const onAddOwner = vi.fn(async () => true);
+
+      wrap(
+        <SafeSettings
+          safeDetails={{
+            owners: ['0x1111111111111111111111111111111111111111'],
+            threshold: 1,
+            nonce: 0
+          }}
+          walletAddress="0x1111111111111111111111111111111111111111"
+          onRemoveOwner={vi.fn(async () => true)}
+          onAddOwner={onAddOwner}
+          onChangeThreshold={vi.fn(async () => true)}
+          onBack={vi.fn()}
+        />
+      );
+
+      fireEvent.change(screen.getByPlaceholderText('0x...'), {
+        target: { value: '0x2222222222222222222222222222222222222222' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'PROPOSE' }));
+
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Scanning...')).toBeInTheDocument();
+
+      // flush effect that schedules the verify-timeout timer
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        vi.advanceTimersByTime(60000);
+        await Promise.resolve();
+      });
+      expect(screen.getByText('Scan timeout')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('CreateSafe 会过滤空 owner 并提交', async () => {

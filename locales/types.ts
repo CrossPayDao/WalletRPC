@@ -114,6 +114,7 @@ export interface I18nSchema {
     op_constructing: string;
     op_broadcasting: string;
     op_scanning: string;
+    op_timeout: string;
     op_verified: string;
     op_proposed: string;
     op_fault: string;
