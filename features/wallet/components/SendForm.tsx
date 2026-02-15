@@ -239,7 +239,7 @@ export const SendForm: React.FC<SendFormProps> = ({
             </div>
             <div className="relative">
               <input 
-                className={`w-full px-4 py-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 transition-all font-mono text-sm shadow-inner outline-none ${recipientError ? 'border-red-300 ring-red-100 animate-shake' : 'border-slate-200 focus:ring-blue-100 focus:border-[#0062ff]/40'}`} 
+                className={`w-full px-4 py-3 border rounded-xl bg-slate-50 focus:bg-white focus:ring-2 transition-all font-mono text-base shadow-inner outline-none ${recipientError ? 'border-red-300 ring-red-100 animate-shake' : 'border-slate-200 focus:ring-blue-100 focus:border-[#0062ff]/40'}`} 
                 placeholder={activeChain.chainType === 'TRON' ? "T..." : "0x..."} 
                 value={recipient} 
                 onChange={e => setRecipient(e.target.value)} 

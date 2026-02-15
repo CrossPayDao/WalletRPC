@@ -142,7 +142,7 @@ export const ChainModal: React.FC<ChainModalProps> = ({
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
                <div>
                  <label className="text-xs font-bold text-slate-500 block mb-2">{t('settings.select_node')}</label>
-               <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium outline-none" value={rpcMode === 'custom' ? 'custom' : config.defaultRpcUrl} onChange={(e) => { const val = e.target.value; if (val === 'custom') setRpcMode('custom'); else { setRpcMode('preset'); setConfig({ ...config, defaultRpcUrl: val }); } }}>
+                 <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-base font-medium outline-none" value={rpcMode === 'custom' ? 'custom' : config.defaultRpcUrl} onChange={(e) => { const val = e.target.value; if (val === 'custom') setRpcMode('custom'); else { setRpcMode('preset'); setConfig({ ...config, defaultRpcUrl: val }); } }}>
                     {initialConfig.publicRpcUrls?.map((url, idx) => (
                       <option key={url} value={url}>
                         Public Node {idx + 1} ({safeHostname(url)})
@@ -154,7 +154,7 @@ export const ChainModal: React.FC<ChainModalProps> = ({
                {rpcMode === 'custom' && (
                  <div className="animate-tech-in">
                     <label className="text-xs font-bold text-slate-500 block mb-2">{t('settings.rpc_connection')}</label>
-                    <input className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono outline-none" value={config.defaultRpcUrl || ''} placeholder="https://..." onChange={e => setConfig({ ...config, defaultRpcUrl: e.target.value })} />
+                    <input className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-base font-mono outline-none" value={config.defaultRpcUrl || ''} placeholder="https://..." onChange={e => setConfig({ ...config, defaultRpcUrl: e.target.value })} />
                      <p className="text-[10px] text-slate-400 mt-1.5 flex items-center"><AlertCircle className="w-3 h-3 mr-1" />{t('settings.node_hint')} ({initialConfig.id}).</p>
                  </div>
                )}
@@ -170,7 +170,7 @@ export const ChainModal: React.FC<ChainModalProps> = ({
                <label className="text-xs font-bold text-slate-500 block mb-2">{t('settings.pref_explorer')}</label>
                {initialConfig.explorers && initialConfig.explorers.length > 0 ? (
                  <div className="space-y-3">
-                   <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-medium outline-none" value={config.defaultExplorerKey || initialConfig.explorers[0].key} onChange={(e) => setConfig({ ...config, defaultExplorerKey: e.target.value })}>
+                   <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2.5 text-base font-medium outline-none" value={config.defaultExplorerKey || initialConfig.explorers[0].key} onChange={(e) => setConfig({ ...config, defaultExplorerKey: e.target.value })}>
                       {initialConfig.explorers.map(e => <option key={e.key} value={e.key}>{e.name}</option>)}
                    </select>
                    {activeExplorer && activeExplorer.url && <a href={activeExplorer.url} target="_blank" rel="noreferrer" className="flex items-center text-xs text-indigo-600 hover:text-indigo-800 font-medium"><span>{t('settings.open_website')}</span><ExternalLink className="w-3 h-3 ml-1" /></a>}
@@ -231,7 +231,7 @@ export const AddTokenModal: React.FC<AddTokenModalProps> = ({ isOpen, onClose, o
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center"><h3 className="font-bold text-slate-900">{t('settings.add_custom_token')}</h3><button onClick={onClose}><X className="w-4 h-4 text-slate-400 hover:text-slate-600" /></button></div>
         <div className="p-6 space-y-4">
           <div className="bg-slate-50 p-3 rounded-lg text-xs text-slate-500 leading-relaxed border border-slate-100">{t('settings.local_storage_hint')}</div>
-          <div><label className="text-xs font-bold text-slate-500 block mb-1.5">{t('settings.contract_address')}</label><input className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono outline-none" placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} autoFocus /></div>
+          <div><label className="text-xs font-bold text-slate-500 block mb-1.5">{t('settings.contract_address')}</label><input className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base font-mono outline-none" placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} autoFocus /></div>
           <Button onClick={() => onImport(address)} isLoading={isImporting} className="w-full py-2.5" disabled={!address}>{t('settings.import_token_btn')}</Button>
           <div className="pt-2 border-t border-slate-50 mt-2"><a href="https://github.com/nexus-vault/wallet-data" target="_blank" rel="noreferrer" className="flex items-center justify-center text-xs text-indigo-600 font-medium gap-1.5"><Github className="w-3.5 h-3.5" /><span>{t('settings.github_add')}</span></a></div>
         </div>
@@ -258,8 +258,8 @@ export const EditTokenModal: React.FC<EditTokenModalProps> = ({ token, onClose, 
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
         <h3 className="font-bold mb-6 text-lg">{t('settings.edit_token')}</h3>
         <div className="space-y-4">
-          <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{t('settings.symbol')}</label><input className="w-full border border-slate-300 rounded-lg px-3 py-2" value={editing.symbol} onChange={e => setEditing({ ...editing, symbol: e.target.value })} /></div>
-          <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{t('settings.decimals')}</label><input className="w-full border border-slate-300 rounded-lg px-3 py-2" type="number" value={editing.decimals} onChange={e => setEditing({ ...editing, decimals: Number(e.target.value) })} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{t('settings.symbol')}</label><input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-base" value={editing.symbol} onChange={e => setEditing({ ...editing, symbol: e.target.value })} /></div>
+          <div><label className="text-xs font-bold text-slate-500 uppercase block mb-1">{t('settings.decimals')}</label><input className="w-full border border-slate-300 rounded-lg px-3 py-2 text-base" type="number" value={editing.decimals} onChange={e => setEditing({ ...editing, decimals: Number(e.target.value) })} /></div>
           <div className="flex gap-3 pt-4"><Button onClick={() => onSave(editing)} className="flex-1">{t('common.save')}</Button><Button onClick={() => onDelete(editing.address)} variant="danger" icon={<Trash2 className="w-4 h-4" />}>{t('common.delete')}</Button></div>
           <button onClick={onClose} className="w-full text-center text-xs text-slate-400 mt-4 hover:text-slate-600">{t('common.cancel')}</button>
         </div>

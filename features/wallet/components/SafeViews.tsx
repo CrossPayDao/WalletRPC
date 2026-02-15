@@ -313,7 +313,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
         <div className="p-4 bg-slate-50/50 border-t border-slate-100">
           <div className="flex gap-2">
              <div className="relative flex-1">
-                <input className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-mono outline-none" placeholder="0x..." value={newOwnerInput} onChange={e => setNewOwnerInput(e.target.value)} />
+                <input className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-base font-mono outline-none" placeholder="0x..." value={newOwnerInput} onChange={e => setNewOwnerInput(e.target.value)} />
                 <Plus className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
              </div>
              <Button onClick={handleStartAddition} className="text-xs px-5 h-auto" disabled={!newOwnerInput.trim()}>{t('safe.propose_action')}</Button>
@@ -367,7 +367,7 @@ export const CreateSafe: React.FC<CreateSafeProps> = ({ onDeploy, onCancel, isDe
             ) : (
                owners.map((owner, i) => (
                  <div key={i} className="flex gap-2 animate-tech-in" style={{ animationDelay: `${i * 0.05}s` }}>
-                   <input className="flex-1 border border-slate-200 rounded-lg px-3 py-2 font-mono text-sm outline-none" value={owner} onChange={e => { const n = [...owners]; n[i] = e.target.value; setOwners(n); }} placeholder="0x..." />
+                   <input className="flex-1 border border-slate-200 rounded-lg px-3 py-2 font-mono text-base outline-none" value={owner} onChange={e => { const n = [...owners]; n[i] = e.target.value; setOwners(n); }} placeholder="0x..." />
                    <button onClick={() => setOwners(owners.filter((_, idx) => idx !== i))} className="p-2 text-slate-300 hover:text-red-500 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                  </div>
                ))
@@ -420,7 +420,7 @@ export const TrackSafe: React.FC<TrackSafeProps> = ({ onTrack, onCancel, isLoadi
         <div className={`absolute top-0 left-0 right-0 h-1 transition-colors duration-300 ${localError ? 'bg-red-500' : 'bg-indigo-500 opacity-20'}`}></div>
         <label className={`text-[10px] font-black uppercase block mb-3 tracking-widest ${localError ? 'text-red-500' : 'text-slate-400'}`}>{t('safe.track_title')}</label>
         <div className="relative mb-2">
-           <input className={`w-full px-4 py-4 border rounded-xl font-mono text-sm outline-none transition-all shadow-inner ${localError ? 'border-red-300 bg-red-50/30 animate-shake' : 'border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-50'}`} placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} />
+           <input className={`w-full px-4 py-4 border rounded-xl font-mono text-base outline-none transition-all shadow-inner ${localError ? 'border-red-300 bg-red-50/30 animate-shake' : 'border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-50'}`} placeholder="0x..." value={address} onChange={e => setAddress(e.target.value)} />
         </div>
         <div className={`flex items-center space-x-2 mb-6 h-6 ${localError ? 'opacity-100' : 'opacity-0'}`}>
            <AlertCircle className="w-3.5 h-3.5 text-red-500" />
