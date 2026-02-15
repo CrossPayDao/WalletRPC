@@ -300,7 +300,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
                 )}
                 <div className="flex items-center min-w-0 flex-1">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black mr-3 flex-shrink-0 transition-colors ${item.isPending ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-slate-100 text-slate-500 border border-slate-200'}`}>{item.isPending ? <Plus className="w-3.5 h-3.5" /> : (idx + 1)}</div>
-                  <span className={`font-mono text-sm truncate uppercase tracking-tight ${item.isPending ? 'text-green-700 italic font-bold' : 'text-slate-600'}`}>{item.address}</span>
+                  <span className={`font-mono text-sm truncate tracking-tight ${item.isPending ? 'text-green-700 italic font-bold' : 'text-slate-600'}`}>{item.address}</span>
                 </div>
                 {!item.isPending && safeDetails.owners.length > 1 && step === 'idle' && (
                   <button onClick={() => handleStartRemoval(item.address)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-all flex-shrink-0"><Trash2 className="w-4 h-4" /></button>
