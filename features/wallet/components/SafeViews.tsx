@@ -147,6 +147,7 @@ interface SafeSettingsProps {
   onRemoveOwner: (owner: string, threshold: number) => Promise<boolean>;
   onAddOwner: (owner: string, threshold: number) => Promise<boolean>;
   onChangeThreshold: (threshold: number) => Promise<boolean>;
+  onRefreshSafeDetails?: (force?: boolean) => void | Promise<void>;
   onBack: () => void;
 }
 
@@ -156,6 +157,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   onRemoveOwner,
   onAddOwner,
   onChangeThreshold,
+  onRefreshSafeDetails,
   onBack
 }) => {
   const { t } = useTranslation();
@@ -163,11 +165,59 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   const [newThresholdSelect, setNewThresholdSelect] = useState(safeDetails.threshold);
   const [optimisticOps, setOptimisticOps] = useState<OptimisticOp[]>([]);
   const verifyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const verifyRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refreshInFlightRef = useRef(false);
+  const refreshRef = useRef(onRefreshSafeDetails);
 
   const isOwner = useMemo(() => {
     if (!walletAddress) return false;
     return safeDetails.owners.some(o => o.toLowerCase() === walletAddress.toLowerCase());
   }, [safeDetails.owners, walletAddress]);
+
+  useEffect(() => {
+    refreshRef.current = onRefreshSafeDetails;
+  }, [onRefreshSafeDetails]);
+
+  // 在 verifying（扫描）阶段主动拉取 Safe 元数据，避免“没有任何请求但一直扫描”的假象
+  useEffect(() => {
+    const hasVerifying = optimisticOps.some((op) => op.step === 'verifying');
+    const refresh = refreshRef.current;
+
+    if (!hasVerifying || !refresh) {
+      if (verifyRefreshIntervalRef.current) {
+        clearInterval(verifyRefreshIntervalRef.current);
+        verifyRefreshIntervalRef.current = null;
+      }
+      return;
+    }
+
+    if (verifyRefreshIntervalRef.current) return;
+
+    const tick = async (force: boolean) => {
+      const fn = refreshRef.current;
+      if (!fn) return;
+      if (refreshInFlightRef.current) return;
+      refreshInFlightRef.current = true;
+      try {
+        await fn(force);
+      } finally {
+        refreshInFlightRef.current = false;
+      }
+    };
+
+    // 立即刷新一次，确保开始“扫描”后能看到真实链上变化
+    void tick(true);
+    verifyRefreshIntervalRef.current = setInterval(() => {
+      void tick(false);
+    }, 5000);
+
+    return () => {
+      if (verifyRefreshIntervalRef.current) {
+        clearInterval(verifyRefreshIntervalRef.current);
+        verifyRefreshIntervalRef.current = null;
+      }
+    };
+  }, [optimisticOps]);
 
   useEffect(() => {
     const makeKey = (op: { address: string; type: OpType }) => `${op.type}:${op.address.toLowerCase()}`;
@@ -211,6 +261,8 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     return () => {
       for (const timer of verifyTimeoutsRef.current.values()) clearTimeout(timer);
       verifyTimeoutsRef.current.clear();
+      if (verifyRefreshIntervalRef.current) clearInterval(verifyRefreshIntervalRef.current);
+      verifyRefreshIntervalRef.current = null;
     };
   }, []);
 

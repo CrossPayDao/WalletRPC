@@ -55,6 +55,11 @@ export const useWalletData = ({
   const lastFetchTime = useRef<number>(0);
   const FETCH_COOLDOWN = 3000; 
 
+  const lastSafeMetaFetchTimeRef = useRef<number>(0);
+  const safeMetaRequestIdRef = useRef(0);
+  const safeMetaInFlightRef = useRef(false);
+  const SAFE_META_COOLDOWN_MS = 4500;
+
   // 监听钱包注销
   useEffect(() => {
     if (!wallet) {
@@ -62,6 +67,9 @@ export const useWalletData = ({
       setIsInitialFetchDone(false);
       verifiedContractRef.current = null;
       lastFetchTime.current = 0;
+      lastSafeMetaFetchTimeRef.current = 0;
+      safeMetaRequestIdRef.current = 0;
+      safeMetaInFlightRef.current = false;
       setSafeDetails(null);
       setBalance('0.00');
     }
@@ -74,12 +82,65 @@ export const useWalletData = ({
    */
   useEffect(() => {
     requestIdRef.current++;
+    safeMetaRequestIdRef.current++;
     verifiedContractRef.current = null;
     lastFetchTime.current = 0; 
+    lastSafeMetaFetchTimeRef.current = 0;
+    safeMetaInFlightRef.current = false;
     setSafeDetails(null); // 立即清理成员列表，防止多签合约间数据污染
     setBalance('0.00');    // 重置余额显示
     setTokenBalances({}); // 重置代币列表
   }, [activeAddress, activeChain.id]);
+
+  /**
+   * 仅刷新 Safe 元数据（Owners/Threshold/Nonce）。
+   * 用途：成员变更的“扫描/验证”阶段需要及时观察链上状态变化，但不应该反复刷新余额/代币余额。
+   */
+  const refreshSafeDetails = async (force: boolean = false) => {
+    if (!wallet || !activeAddress) return;
+    if (activeChain.chainType === 'TRON') return;
+    if (activeAccountType !== 'SAFE') return;
+    if (!provider) return;
+
+    const now = Date.now();
+    if (!force && (now - lastSafeMetaFetchTimeRef.current < SAFE_META_COOLDOWN_MS)) return;
+    if (safeMetaInFlightRef.current) return;
+
+    safeMetaInFlightRef.current = true;
+    const reqId = ++safeMetaRequestIdRef.current;
+
+    try {
+      lastSafeMetaFetchTimeRef.current = now;
+
+      let isContractVerified = verifiedContractRef.current === activeAddress;
+      if (!isContractVerified) {
+        const code = await provider.getCode(activeAddress);
+        if (reqId !== safeMetaRequestIdRef.current) return;
+        if (code !== '0x' && code !== '0x0') {
+          verifiedContractRef.current = activeAddress;
+          isContractVerified = true;
+        }
+      }
+      if (!isContractVerified) return;
+
+      const safeContract = new ethers.Contract(activeAddress, SAFE_ABI, provider);
+      const [owners, threshold, nonce] = await Promise.all([
+        safeContract.getOwners(),
+        safeContract.getThreshold(),
+        safeContract.nonce()
+      ]);
+      if (reqId !== safeMetaRequestIdRef.current) return;
+      setSafeDetails({ owners, threshold: Number(threshold), nonce: Number(nonce) });
+    } catch (e: unknown) {
+      // 只在 force（用户意图/关键阶段）时提示，避免后台轮询刷屏
+      if (force) {
+        const normalized = handleTxError(e as any, t);
+        setError(normalized || t('wallet.data_sync_fault'));
+      }
+    } finally {
+      safeMetaInFlightRef.current = false;
+    }
+  };
 
   /**
    * 【核心同步逻辑：并行查询策略】
@@ -186,5 +247,5 @@ export const useWalletData = ({
     }
   };
 
-  return { balance, tokenBalances, safeDetails, isInitialFetchDone, fetchData };
+  return { balance, tokenBalances, safeDetails, isInitialFetchDone, fetchData, refreshSafeDetails };
 };

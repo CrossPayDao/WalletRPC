@@ -161,6 +161,7 @@ describe('Safe views UI', () => {
     vi.useFakeTimers();
     try {
       const onAddOwner = vi.fn(async () => true);
+      const onRefreshSafeDetails = vi.fn(async () => {});
 
       wrap(
         <SafeSettings
@@ -173,6 +174,7 @@ describe('Safe views UI', () => {
           onRemoveOwner={vi.fn(async () => true)}
           onAddOwner={onAddOwner}
           onChangeThreshold={vi.fn(async () => true)}
+          onRefreshSafeDetails={onRefreshSafeDetails}
           onBack={vi.fn()}
         />
       );
@@ -187,6 +189,7 @@ describe('Safe views UI', () => {
         await Promise.resolve();
       });
       expect(screen.getByText('Scanning...')).toBeInTheDocument();
+      expect(onRefreshSafeDetails).toHaveBeenCalled();
 
       // flush effect that schedules the verify-timeout timer
       await act(async () => {
