@@ -85,14 +85,14 @@ export const ChainModal: React.FC<ChainModalProps> = ({
             return;
           }
         } else {
-          const ok = await validateEvmRpcEndpoint(rpcUrlRaw, resolvedConfig.id);
-          if (!ok.ok) {
-            if (ok.code === 'rpc_url_invalid_scheme') {
+          const probe = await validateEvmRpcEndpoint(rpcUrlRaw, resolvedConfig.id);
+          if (probe.ok === false) {
+            if (probe.code === 'rpc_url_invalid_scheme') {
               setSaveError(t('settings.rpc_url_invalid_scheme'));
-            } else if (ok.code === 'rpc_chainid_mismatch') {
-              setSaveError(`${t('settings.rpc_chainid_mismatch')}: expected ${ok.expected}, got ${ok.got}`);
+            } else if (probe.code === 'rpc_chainid_mismatch') {
+              setSaveError(`${t('settings.rpc_chainid_mismatch')}: expected ${probe.expected}, got ${probe.got}`);
             } else {
-              setSaveError(`${t('settings.rpc_validation_failed')}: ${ok.detail}`);
+              setSaveError(`${t('settings.rpc_validation_failed')}: ${probe.detail}`);
             }
             return;
           }
