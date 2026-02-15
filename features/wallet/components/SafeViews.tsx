@@ -24,7 +24,7 @@ interface SafeSettingsProps {
   onRemoveOwner: (owner: string, threshold: number) => Promise<boolean>;
   onAddOwner: (owner: string, threshold: number) => Promise<boolean>;
   onChangeThreshold: (threshold: number) => Promise<boolean>;
-  onRefreshSafeDetails?: (force?: boolean) => void | Promise<void>;
+  onRefreshSafeDetails?: (force?: boolean, fields?: { owners?: boolean; threshold?: boolean; nonce?: boolean }) => void | Promise<void>;
   onBack: () => void;
 }
 
@@ -97,7 +97,9 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       if (refreshInFlightRef.current) return;
       refreshInFlightRef.current = true;
       try {
-        await fn(force);
+        // During verification we only need owners/threshold to decide whether a membership change landed.
+        // Avoid polling Safe nonce to reduce RPC pressure.
+        await fn(force, { owners: true, threshold: true, nonce: false });
       } finally {
         refreshInFlightRef.current = false;
       }

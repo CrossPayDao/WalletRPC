@@ -21,6 +21,12 @@ interface UseWalletDataParams {
   setError: (message: string | null) => void;
 }
 
+export type SafeMetaFields = {
+  owners?: boolean;
+  threshold?: boolean;
+  nonce?: boolean;
+};
+
 export const useWalletData = ({
   wallet,
   activeAddress,
@@ -96,11 +102,15 @@ export const useWalletData = ({
    * 仅刷新 Safe 元数据（Owners/Threshold/Nonce）。
    * 用途：成员变更的“扫描/验证”阶段需要及时观察链上状态变化，但不应该反复刷新余额/代币余额。
    */
-  const refreshSafeDetails = async (force: boolean = false) => {
+  const refreshSafeDetails = async (force: boolean = false, fields?: SafeMetaFields) => {
     if (!wallet || !activeAddress) return;
     if (activeChain.chainType === 'TRON') return;
     if (activeAccountType !== 'SAFE') return;
     if (!provider) return;
+
+    const wantOwners = fields?.owners ?? true;
+    const wantThreshold = fields?.threshold ?? true;
+    const wantNonce = fields?.nonce ?? true;
 
     const now = Date.now();
     if (!force && (now - lastSafeMetaFetchTimeRef.current < SAFE_META_COOLDOWN_MS)) return;
@@ -124,13 +134,37 @@ export const useWalletData = ({
       if (!isContractVerified) return;
 
       const safeContract = new ethers.Contract(activeAddress, SAFE_ABI, provider);
-      const [owners, threshold, nonce] = await Promise.all([
-        safeContract.getOwners(),
-        safeContract.getThreshold(),
-        safeContract.nonce()
-      ]);
+      // If there are no previous details, fetch full meta to keep the schema consistent.
+      const needsFull = !safeDetails || (wantOwners && wantThreshold && wantNonce);
+      if (needsFull) {
+        const [owners, threshold, nonce] = await Promise.all([
+          safeContract.getOwners(),
+          safeContract.getThreshold(),
+          safeContract.nonce()
+        ]);
+        if (reqId !== safeMetaRequestIdRef.current) return;
+        setSafeDetails({ owners, threshold: Number(threshold), nonce: Number(nonce) });
+        return;
+      }
+
+      const tasks: Array<Promise<{ k: 'owners' | 'threshold' | 'nonce'; v: any }>> = [];
+      if (wantOwners) tasks.push(safeContract.getOwners().then((v: any) => ({ k: 'owners' as const, v })));
+      if (wantThreshold) tasks.push(safeContract.getThreshold().then((v: any) => ({ k: 'threshold' as const, v })));
+      if (wantNonce) tasks.push(safeContract.nonce().then((v: any) => ({ k: 'nonce' as const, v })));
+
+      const results = await Promise.all(tasks);
       if (reqId !== safeMetaRequestIdRef.current) return;
-      setSafeDetails({ owners, threshold: Number(threshold), nonce: Number(nonce) });
+
+      setSafeDetails((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev };
+        for (const r of results) {
+          if (r.k === 'owners') (next as any).owners = r.v;
+          if (r.k === 'threshold') (next as any).threshold = Number(r.v);
+          if (r.k === 'nonce') (next as any).nonce = Number(r.v);
+        }
+        return next;
+      });
     } catch (e: unknown) {
       // 只在 force（用户意图/关键阶段）时提示，避免后台轮询刷屏
       if (force) {
