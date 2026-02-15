@@ -3,6 +3,13 @@ import { useState, useEffect } from 'react';
 import { DEFAULT_CHAINS } from '../config';
 import { ChainConfig, TokenConfig, TrackedSafe, SafePendingTx } from '../types';
 
+const STORAGE_KEYS = {
+  trackedSafes: { current: 'walletrpc_tracked_safes', legacy: 'zerostate_tracked_safes' },
+  customChains: { current: 'walletrpc_custom_chains', legacy: 'zerostate_custom_chains' },
+  customTokens: { current: 'walletrpc_custom_tokens', legacy: 'zerostate_custom_tokens' },
+  pendingSafeTxs: { current: 'walletrpc_pending_safe_txs', legacy: 'zerostate_pending_safe_txs' }
+} as const;
+
 /**
  * 【架构设计：声明式持久化层 (Persistence Layer)】
  * 目的：管理所有需要跨页面刷新存在的用户数据。
@@ -15,6 +22,7 @@ export const useWalletStorage = () => {
   const [chains, setChains] = useState<ChainConfig[]>(DEFAULT_CHAINS);
   const [customTokens, setCustomTokens] = useState<Record<number, TokenConfig[]>>({});
   const [pendingSafeTxs, setPendingSafeTxs] = useState<SafePendingTx[]>([]);
+  const [hydrated, setHydrated] = useState(false);
 
   const safeGetItem = (key: string): string | null => {
     try {
@@ -32,15 +40,54 @@ export const useWalletStorage = () => {
     }
   };
 
-  const parseStorageItem = <T,>(key: string, fallback: T): T => {
-    const raw = safeGetItem(key);
-    if (!raw) return fallback;
+  const safeRemoveItem = (key: string): void => {
     try {
-      return JSON.parse(raw) as T;
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  };
+
+  const parseRawJson = <T,>(key: string, raw: string, fallback: T): { value: T; ok: boolean } => {
+    if (!raw) return { value: fallback, ok: false };
+    try {
+      return { value: JSON.parse(raw) as T, ok: true };
     } catch (error) {
       console.warn(`Storage parse failed for key: ${key}`, error);
+      return { value: fallback, ok: false };
+    }
+  };
+
+  const readWithMigration = <T,>(keys: { current: string; legacy: string }, fallback: T): T => {
+    const currentRaw = safeGetItem(keys.current);
+    if (currentRaw != null) {
+      const parsed = parseRawJson<T>(keys.current, currentRaw, fallback);
+      if (parsed.ok) return parsed.value;
+
+      // current key 损坏时尝试回退 legacy，以最大化可恢复性
+      const legacyRaw = safeGetItem(keys.legacy);
+      if (legacyRaw != null) {
+        const legacyParsed = parseRawJson<T>(keys.legacy, legacyRaw, fallback);
+        if (legacyParsed.ok) {
+          safeSetItem(keys.current, JSON.stringify(legacyParsed.value));
+          safeRemoveItem(keys.legacy);
+          return legacyParsed.value;
+        }
+      }
       return fallback;
     }
+
+    const legacyRaw = safeGetItem(keys.legacy);
+    if (legacyRaw != null) {
+      const legacyParsed = parseRawJson<T>(keys.legacy, legacyRaw, fallback);
+      if (legacyParsed.ok) {
+        safeSetItem(keys.current, JSON.stringify(legacyParsed.value));
+        safeRemoveItem(keys.legacy);
+        return legacyParsed.value;
+      }
+    }
+
+    return fallback;
   };
 
   /**
@@ -52,12 +99,12 @@ export const useWalletStorage = () => {
    * 好处：用户既能保留自定义设置，又能自动获得开发者新添加的代币或浏览器链接。
    */
   useEffect(() => {
-    const savedSafes = parseStorageItem<unknown>('zerostate_tracked_safes', []);
+    const savedSafes = readWithMigration<unknown>(STORAGE_KEYS.trackedSafes, []);
     if (Array.isArray(savedSafes) && savedSafes.length > 0) {
       setTrackedSafes(savedSafes as TrackedSafe[]);
     }
 
-    const customChainConfigsRaw = parseStorageItem<unknown>('zerostate_custom_chains', []);
+    const customChainConfigsRaw = readWithMigration<unknown>(STORAGE_KEYS.customChains, []);
     const customChainConfigs = Array.isArray(customChainConfigsRaw)
       ? (customChainConfigsRaw as ChainConfig[])
       : [];
@@ -83,35 +130,45 @@ export const useWalletStorage = () => {
       setChains(mergedChains);
     }
 
-    const savedTokens = parseStorageItem<unknown>('zerostate_custom_tokens', {});
+    const savedTokens = readWithMigration<unknown>(STORAGE_KEYS.customTokens, {});
     if (savedTokens && typeof savedTokens === 'object' && Object.keys(savedTokens).length > 0) {
       setCustomTokens(savedTokens as Record<number, TokenConfig[]>);
     }
 
-    const savedSafeTxs = parseStorageItem<unknown>('zerostate_pending_safe_txs', []);
+    const savedSafeTxs = readWithMigration<unknown>(STORAGE_KEYS.pendingSafeTxs, []);
     if (Array.isArray(savedSafeTxs) && savedSafeTxs.length > 0) {
       setPendingSafeTxs(savedSafeTxs as SafePendingTx[]);
     }
+
+    setHydrated(true);
   }, []);
 
   // --- 自动保存触发器 ---
   // 这种模式确保了“UI 状态即存储状态”，开发者无需手动调用 save()
   useEffect(() => {
-    safeSetItem('zerostate_tracked_safes', JSON.stringify(trackedSafes));
-  }, [trackedSafes]);
+    if (!hydrated) return;
+    safeSetItem(STORAGE_KEYS.trackedSafes.current, JSON.stringify(trackedSafes));
+    safeRemoveItem(STORAGE_KEYS.trackedSafes.legacy);
+  }, [trackedSafes, hydrated]);
 
   useEffect(() => {
+     if (!hydrated) return;
      const chainsToSave = chains.filter(c => c.isCustom);
-     safeSetItem('zerostate_custom_chains', JSON.stringify(chainsToSave));
-  }, [chains]);
+     safeSetItem(STORAGE_KEYS.customChains.current, JSON.stringify(chainsToSave));
+     safeRemoveItem(STORAGE_KEYS.customChains.legacy);
+  }, [chains, hydrated]);
 
   useEffect(() => {
-     safeSetItem('zerostate_custom_tokens', JSON.stringify(customTokens));
-  }, [customTokens]);
+     if (!hydrated) return;
+     safeSetItem(STORAGE_KEYS.customTokens.current, JSON.stringify(customTokens));
+     safeRemoveItem(STORAGE_KEYS.customTokens.legacy);
+  }, [customTokens, hydrated]);
 
   useEffect(() => {
-     safeSetItem('zerostate_pending_safe_txs', JSON.stringify(pendingSafeTxs));
-  }, [pendingSafeTxs]);
+     if (!hydrated) return;
+     safeSetItem(STORAGE_KEYS.pendingSafeTxs.current, JSON.stringify(pendingSafeTxs));
+     safeRemoveItem(STORAGE_KEYS.pendingSafeTxs.legacy);
+  }, [pendingSafeTxs, hydrated]);
 
   return { trackedSafes, setTrackedSafes, chains, setChains, customTokens, setCustomTokens, pendingSafeTxs, setPendingSafeTxs };
 };

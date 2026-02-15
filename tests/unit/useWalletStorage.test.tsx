@@ -58,6 +58,9 @@ describe('useWalletStorage', () => {
     });
 
     expect(result.current.chains.some(c => c.id === 99999)).toBe(true);
+    // 应迁移到新 key
+    expect(localStorage.getItem('walletrpc_custom_chains')).toContain('custom-rpc.local');
+    expect(localStorage.getItem('zerostate_custom_chains')).toBeNull();
   });
 
   it('状态变更会自动回写 localStorage', async () => {
@@ -74,9 +77,10 @@ describe('useWalletStorage', () => {
     });
 
     await waitFor(() => {
-      const saved = localStorage.getItem('zerostate_tracked_safes');
+      const saved = localStorage.getItem('walletrpc_tracked_safes');
       expect(saved).toContain('Safe_dead');
     });
+    expect(localStorage.getItem('zerostate_tracked_safes')).toBeNull();
   });
 
   it('单个损坏的存储 key 不会阻断其他 key 的恢复', async () => {
@@ -99,6 +103,22 @@ describe('useWalletStorage', () => {
     expect(result.current.chains[0].id).toBe(DEFAULT_CHAINS[0].id);
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it('恢复 trackedSafes 时可从 legacy key 迁移到新 key', async () => {
+    localStorage.setItem('zerostate_tracked_safes', JSON.stringify([
+      { address: '0x000000000000000000000000000000000000dEaD', name: 'Safe_dead', chainId: DEFAULT_CHAINS[0].id }
+    ]));
+
+    const { result } = renderHook(() => useWalletStorage());
+
+    await waitFor(() => {
+      expect(result.current.trackedSafes).toHaveLength(1);
+      expect(result.current.trackedSafes[0].name).toBe('Safe_dead');
+    });
+
+    expect(localStorage.getItem('walletrpc_tracked_safes')).toContain('Safe_dead');
+    expect(localStorage.getItem('zerostate_tracked_safes')).toBeNull();
   });
 
   it('localStorage 不可用时不应崩溃，且状态更新仍能生效', async () => {
