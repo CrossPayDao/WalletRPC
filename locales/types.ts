@@ -178,6 +178,13 @@ export interface I18nSchema {
     intent_get_receipt: string;
     intent_get_code: string;
     intent_get_block: string;
+    intent_get_block_number: string;
+    intent_chain_id: string;
+    intent_http_request: string;
+    intent_load_asset: string;
+    intent_load_page: string;
+    intent_preflight: string;
+    intent_rpc_call: string;
     intent_call_contract: string;
     intent_estimate_gas: string;
     intent_token_balance: string;

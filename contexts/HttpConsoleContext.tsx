@@ -54,6 +54,31 @@ const safeJsonParse = (raw: unknown): unknown => {
   }
 };
 
+const toTextBody = async (input: any, init?: RequestInit): Promise<string | null> => {
+  try {
+    if (init?.body != null) {
+      const b: any = init.body as any;
+      if (typeof b === 'string') return b;
+      if (b instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(b));
+      if (ArrayBuffer.isView(b)) return new TextDecoder().decode(new Uint8Array(b.buffer, b.byteOffset, b.byteLength));
+      if (typeof Blob !== 'undefined' && b instanceof Blob) return await b.text();
+      return null;
+    }
+    if (typeof Request !== 'undefined' && input instanceof Request) {
+      // If the body was provided via Request, clone and read it.
+      try {
+        const txt = await input.clone().text();
+        return txt || null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 const redactRpcPayload = (payload: unknown): unknown => {
   // Avoid dumping huge or sensitive blobs (e.g., eth_sendRawTransaction raw tx).
   const redactHex = (v: unknown): unknown => {
@@ -181,6 +206,12 @@ const describeRpcCall = (rpcMethod: string | undefined, params: unknown, t: (k: 
   if (rpcMethod === 'eth_getBlockByNumber') {
     return t('console.intent_get_block');
   }
+  if (rpcMethod === 'eth_blockNumber') {
+    return t('console.intent_get_block_number');
+  }
+  if (rpcMethod === 'eth_chainId') {
+    return t('console.intent_chain_id');
+  }
   if (rpcMethod === 'eth_call') {
     const call = p[0];
     return describeEthCall(call, t);
@@ -190,7 +221,9 @@ const describeRpcCall = (rpcMethod: string | undefined, params: unknown, t: (k: 
   }
 
   // Fallback to static semantic descriptions.
-  return actionForRpc(rpcMethod, t);
+  const fallback = actionForRpc(rpcMethod, t);
+  if (fallback !== t('console.action_unknown')) return fallback;
+  return `${t('console.intent_rpc_call')}${rpcMethod}`;
 };
 
 const withBatchPrefix = (base: string, batchSize: number, idx: number, t: (k: string) => string): string => {
@@ -230,6 +263,16 @@ const actionForTronPath = (path: string, t: (k: string) => string): string => {
   };
   const k = keyMap[clean];
   return k ? t(k) : t('console.action_unknown');
+};
+
+const actionForHttp = (method: string, pathname: string, t: (k: string) => string): string => {
+  const m = String(method || 'GET').toUpperCase();
+  if (m === 'OPTIONS') return t('console.intent_preflight');
+  const p = String(pathname || '/');
+  const lower = p.toLowerCase();
+  if (m === 'GET' && (lower === '/' || lower === '/index.html')) return t('console.intent_load_page');
+  if (m === 'GET' && /\.(js|css|png|jpg|jpeg|svg|ico|webp|woff2?|ttf|map|json)$/i.test(lower)) return t('console.intent_load_asset');
+  return t('console.intent_http_request');
 };
 
 export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -273,8 +316,8 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
         host = 'unknown';
       }
 
-      const rawBody = init?.body;
-      const requestText = typeof rawBody === 'string' ? clip(rawBody, MAX_BODY_CHARS) : rawBody;
+      const rawTextBody = await toTextBody(input, init);
+      const requestText = rawTextBody != null ? clip(rawTextBody, MAX_BODY_CHARS) : init?.body;
       const parsedBody = safeJsonParse(requestText);
       const rpcMeta = deriveRpcMeta(parsedBody);
       const isLikelyRpc = method === 'POST' && typeof parsedBody === 'object' && !!rpcMeta.rpcMethod;
@@ -339,8 +382,12 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
             const m = rpcMeta.rpcMethod;
             const params = (parsedBody as any)?.params;
             action = describeRpcCall(m, params, t);
-          } else if (host && pathname && host !== 'unknown' && pathname.startsWith('/wallet')) {
-            action = actionForTronPath(pathname, t);
+          } else {
+            if (host && pathname && host !== 'unknown' && pathname.startsWith('/wallet')) {
+              action = actionForTronPath(pathname, t);
+            } else {
+              action = actionForHttp(method, pathname, t);
+            }
           }
 
           pushEvent({
@@ -407,7 +454,7 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
             isRpcBatch: rpcMeta.isBatch,
             action: category === 'rpc'
               ? describeRpcCall(rpcMeta.rpcMethod, (parsedBody as any)?.params, t)
-              : t('console.action_unknown')
+              : actionForHttp(method, pathname, t)
           });
         }
         throw e;
@@ -487,6 +534,7 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
           action = describeRpcCall(rpcMeta.rpcMethod, (parsedBody as any)?.params, t);
         }
         else if (host && pathname && pathname.startsWith('/wallet')) action = actionForTronPath(pathname, t);
+        else action = actionForHttp(method, pathname, t);
 
         pushEvent({
           id: `${start}:${Math.random().toString(16).slice(2)}`,
