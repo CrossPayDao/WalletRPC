@@ -171,7 +171,12 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
         </div>
 
         <div className={isDock ? 'grid grid-cols-1' : 'grid grid-cols-1 lg:grid-cols-2'}>
-          <div className={`divide-y divide-slate-100 overflow-y-auto ${isDock ? 'max-h-[35vh]' : 'max-h-[60vh]'}`}>
+          <div
+            className={[
+              'divide-y divide-slate-100',
+              isDock ? 'overflow-visible' : 'overflow-y-auto max-h-[60vh]'
+            ].join(' ')}
+          >
             {events.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-sm">{t('console.empty')}</div>
             ) : (
@@ -203,7 +208,13 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
             )}
           </div>
 
-          <div className={`${isDock ? 'border-t border-slate-100 p-3 bg-white max-h-[30vh] overflow-y-auto' : 'border-t lg:border-t-0 lg:border-l border-slate-100 p-4 bg-white max-h-[60vh] overflow-y-auto'}`}>
+          <div
+            className={
+              isDock
+                ? 'border-t border-slate-100 p-3 bg-white overflow-visible'
+                : 'border-t lg:border-t-0 lg:border-l border-slate-100 p-4 bg-white max-h-[60vh] overflow-y-auto'
+            }
+          >
             {!selected ? (
               <div className="text-sm text-slate-400">{t('console.details')}</div>
             ) : (

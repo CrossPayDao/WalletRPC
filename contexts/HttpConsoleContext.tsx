@@ -649,7 +649,10 @@ const HttpConsoleDock: React.FC = () => {
             style={{ width: 'min(92vw, 460px)' }}
             aria-label="http-console-panel"
           >
-            <div className="max-h-[70vh] overflow-hidden">
+            <div
+              className="max-h-[70vh] overflow-y-auto overscroll-contain"
+              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' as any }}
+            >
               <ConsoleView mode="dock" onMinimize={() => setExpanded(false)} />
             </div>
           </div>
