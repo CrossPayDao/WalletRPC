@@ -19,11 +19,14 @@ const EditTokenModal = React.lazy(() => import('./components/Modals').then(m => 
 const ParticleIntro = React.lazy(() => import('../../components/ui/ParticleIntro').then(m => ({ default: m.ParticleIntro })));
 
 const TechAlert: React.FC<{ type: 'error' | 'success'; message: string; onClose?: () => void }> = ({ type, message, onClose }) => (
-  <div className={`
-    fixed top-20 left-1/2 transform -translate-x-1/2 z-[100]
-    flex items-center px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md animate-tech-in w-[min(420px,90vw)]
-    ${type === 'error' ? 'bg-white border-red-500 text-red-700' : 'bg-white border-[#0062ff] text-[#0062ff]'}
-  `}>
+  <div
+    className={`
+      fixed top-20 left-1/2 transform -translate-x-1/2 z-[100]
+      flex items-center px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-md animate-tech-in w-[min(420px,90vw)]
+      ${type === 'error' ? 'bg-white border-red-500 text-red-700' : 'bg-white border-[#0062ff] text-[#0062ff]'}
+    `}
+    style={{ top: 'calc(5rem + var(--safe-top))' }}
+  >
     <div className="flex-shrink-0 mr-3">
       {type === 'error' ? <XCircle className="w-5 h-5 text-red-500" /> : <CheckCircle className="w-5 h-5 text-[#0062ff]" />}
     </div>
@@ -37,7 +40,13 @@ const TechAlert: React.FC<{ type: 'error' | 'success'; message: string; onClose?
 );
 
 const NotificationToast: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => (
-  <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[100] animate-tech-in max-w-[90vw]">
+  <div
+    className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[100] animate-tech-in max-w-[90vw]"
+    style={{
+      top: 'calc(1rem + var(--safe-top))',
+      right: 'calc(1rem + var(--safe-right))'
+    }}
+  >
     <div className="bg-white/90 text-slate-900 px-5 py-4 rounded-xl shadow-2xl flex items-center border border-slate-200 backdrop-blur-md">
       <Bell className="w-5 h-5 text-[#0062ff] mr-3 flex-shrink-0" />
       <span className="text-[10px] font-black uppercase tracking-widest mr-6 truncate">{message}</span>

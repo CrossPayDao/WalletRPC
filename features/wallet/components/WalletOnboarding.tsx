@@ -29,7 +29,13 @@ export const WalletOnboarding: React.FC<WalletOnboardingProps> = ({ input, setIn
     `}>
       
       {/* 语言切换悬浮按钮 */}
-      <div className="fixed top-4 right-4 sm:top-8 sm:right-8 z-50 flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm">
+      <div
+        className="fixed top-4 right-4 sm:top-8 sm:right-8 z-50 flex items-center bg-white border border-slate-200 rounded-full p-1 shadow-sm"
+        style={{
+          top: 'calc(1rem + var(--safe-top))',
+          right: 'calc(1rem + var(--safe-right))'
+        }}
+      >
          <button 
            onClick={() => setLanguage('en')}
            className={`px-3 py-1 text-[10px] font-black rounded-full transition-all ${language === 'en' ? 'bg-[#0062ff] text-white' : 'text-slate-400'}`}
