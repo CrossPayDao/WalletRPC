@@ -75,6 +75,30 @@ export interface I18nSchema {
     err_safe_gs013: string;
     err_safe_gs026: string;
     err_transaction_failed: string;
+
+    err_network_error: string;
+    err_timeout: string;
+    err_rpc_http_status: string;
+    err_rpc_rate_limited: string;
+    err_rpc_unauthorized: string;
+    err_rpc_forbidden: string;
+    err_rpc_not_found: string;
+    err_rpc_bad_gateway: string;
+    err_rpc_service_unavailable: string;
+    err_rpc_gateway_timeout: string;
+    err_rpc_cors: string;
+    err_rpc_connection_refused: string;
+    err_rpc_dns: string;
+    err_rpc_method_not_found: string;
+    err_rpc_invalid_params: string;
+    err_rpc_internal_error: string;
+    err_rpc_parse_error: string;
+    err_rpc_invalid_request: string;
+    err_tx_underpriced: string;
+    err_fee_cap_too_low: string;
+    err_priority_fee_too_low: string;
+    err_intrinsic_gas_too_low: string;
+    err_already_replaced: string;
   };
   safe: {
     queue_title: string; current_nonce: string; all_clear: string; signatures: string;
