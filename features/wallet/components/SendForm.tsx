@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Settings, ArrowLeft, Zap, Coins, AlertTriangle, ArrowRight, RefreshCw, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Zap, Coins, AlertTriangle, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
 import { ChainConfig, TokenConfig, TransactionRecord } from '../types';
 import { ProcessResult } from '../hooks/useTransactionManager';
@@ -16,11 +16,6 @@ export interface SendFormData {
   asset: string;
   assetAddress?: string;
   assetDecimals?: number;
-  customData: string;
-  gasPrice: string;
-  gasLimit: string;
-  nonce?: number;
-  bypassBalanceCheck?: boolean;
 }
 
 interface SendFormProps {
@@ -28,7 +23,6 @@ interface SendFormProps {
   tokens: TokenConfig[];
   balances: Record<string, string>;
   activeAccountType: 'EOA' | 'SAFE';
-  recommendedNonce: number;
   onSend: (data: SendFormData) => Promise<ProcessResult>;
   onBack: () => void;
   onRefresh?: () => void;
@@ -41,7 +35,6 @@ export const SendForm: React.FC<SendFormProps> = ({
   tokens,
   balances,
   activeAccountType,
-  recommendedNonce,
   onSend,
   onBack,
   onRefresh,
@@ -52,11 +45,6 @@ export const SendForm: React.FC<SendFormProps> = ({
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [selectedAssetKey, setSelectedAssetKey] = useState('NATIVE');
-  const [customData, setCustomData] = useState('0x');
-  const [gasPrice, setGasPrice] = useState('');
-  const [gasLimit, setGasLimit] = useState('');
-  const [customNonce, setCustomNonce] = useState<string>('');
-  const [isAdvancedSend, setIsAdvancedSend] = useState(false);
   const [hasAcknowledgedBalance, setHasAcknowledgedBalance] = useState(false);
   
   const [transferStatus, setTransferStatus] = useState<TransferStatus>('idle');
@@ -151,12 +139,7 @@ export const SendForm: React.FC<SendFormProps> = ({
       amount,
       asset: currentToken ? currentToken.symbol : 'NATIVE',
       assetAddress: currentToken?.address,
-      assetDecimals: currentToken?.decimals,
-      customData,
-      gasPrice,
-      gasLimit,
-      nonce: customNonce ? parseInt(customNonce) : undefined,
-      bypassBalanceCheck: hasAcknowledgedBalance
+      assetDecimals: currentToken?.decimals
     });
 
     if (result.success) {

@@ -70,11 +70,11 @@ export const WalletApp: React.FC = () => {
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('e2e') === '1';
   const {
-    wallet, setWallet, activeChain, activeAddress, activeChainTokens, activeAccountType, setActiveAccountType, activeSafeAddress, setActiveSafeAddress,
-    activeChainId, setActiveChainId, chains, view, setView, isMenuOpen, setIsMenuOpen, isLoading, isInitialFetchDone, error, errorObject, notification,
+    wallet, activeChain, activeAddress, activeChainTokens, activeAccountType, setActiveAccountType, activeSafeAddress, setActiveSafeAddress,
+    activeChainId, chains, view, setView, isMenuOpen, setIsMenuOpen, isLoading, isInitialFetchDone, error, errorObject, notification,
     isChainModalOpen, setIsChainModalOpen, isAddTokenModalOpen, setIsAddTokenModalOpen, tokenToEdit, setTokenToEdit, balance, tokenBalances, transactions,
-    safeDetails, pendingSafeTxs, currentNonce, isDeployingSafe, trackedSafes, setTrackedSafes, privateKeyOrPhrase, setPrivateKeyOrPhrase, handleImport,
-    fetchData, handleSendSubmit, handleAddSignature, handleExecutePending, confirmAddToken, handleUpdateToken, handleRemoveToken, handleSaveChain,
+    safeDetails, pendingSafeTxs, isDeployingSafe, trackedSafes, setTrackedSafes, privateKeyOrPhrase, setPrivateKeyOrPhrase, handleImport,
+    handleSendSubmit, handleAddSignature, handleExecutePending, confirmAddToken, handleUpdateToken, handleRemoveToken, handleSaveChain,
     handleTrackSafe, handleSwitchNetwork, handleLogout, handleRefreshData, deploySafe, addOwnerTx, removeOwnerTx, changeThresholdTx, setError
   } = useEvmWallet();
 
@@ -212,7 +212,7 @@ export const WalletApp: React.FC = () => {
             <React.Suspense fallback={<div className="min-h-[320px] bg-white/70 rounded-2xl border border-slate-200" />}>
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                {view === 'dashboard' && <><WalletDashboard balance={balance} activeChain={activeChain} chains={chains} address={activeAddress || ''} isLoading={isLoading} onRefresh={handleRefreshData} onSend={() => setView('send')} activeAccountType={activeAccountType} pendingTxCount={safePendingCount} onViewQueue={() => setView('safe_queue')} onViewSettings={() => setView('settings')} tokens={activeChainTokens} tokenBalances={tokenBalances} onAddToken={() => setIsAddTokenModalOpen(true)} onEditToken={setTokenToEdit} transactions={transactions} /><div className="mt-12 mb-6 text-center opacity-20"><p className="text-[9px] font-black text-slate-300 uppercase tracking-[0.4em] italic">{t('wallet.disclaimer')}</p></div></>}
-               {view === 'send' && <SendForm activeChain={activeChain} tokens={activeChainTokens} balances={{ ...tokenBalances, NATIVE: balance }} activeAccountType={activeAccountType} recommendedNonce={currentNonce} onSend={handleSendSubmit} onBack={() => setView('dashboard')} onRefresh={handleRefreshData} isLoading={isLoading} transactions={transactions} />}
+               {view === 'send' && <SendForm activeChain={activeChain} tokens={activeChainTokens} balances={{ ...tokenBalances, NATIVE: balance }} activeAccountType={activeAccountType} onSend={handleSendSubmit} onBack={() => setView('dashboard')} onRefresh={handleRefreshData} isLoading={isLoading} transactions={transactions} />}
                {view === 'safe_queue' && <SafeQueue pendingTxs={pendingSafeTxs} safeDetails={safeDetails} activeChainId={activeChainId} activeSafeAddress={activeSafeAddress} walletAddress={wallet?.address} onSign={handleAddSignature} onExecute={handleExecutePending} onBack={() => setView('dashboard')} />}
                {view === 'settings' && safeDetails && <SafeSettings safeDetails={safeDetails} walletAddress={wallet?.address} onRemoveOwner={removeOwnerTx} onAddOwner={addOwnerTx} onChangeThreshold={changeThresholdTx} onBack={() => setView('dashboard')} />}
                {view === 'create_safe' && <CreateSafe onDeploy={deploySafe} onCancel={() => setView('dashboard')} isDeploying={isDeployingSafe} walletAddress={wallet?.address} />}

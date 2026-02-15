@@ -40,7 +40,6 @@ describe('SendForm UI', () => {
         tokens={chain.tokens}
         balances={{ NATIVE: '1.00', [chain.tokens[0].address.toLowerCase()]: '10.00' }}
         activeAccountType="EOA"
-        recommendedNonce={0}
         onSend={vi.fn(async () => ({ success: true }))}
         onBack={vi.fn()}
         onRefresh={onRefresh}
@@ -59,7 +58,6 @@ describe('SendForm UI', () => {
         tokens={chain.tokens}
         balances={{ NATIVE: '1.00', [chain.tokens[0].address.toLowerCase()]: '10.00' }}
         activeAccountType="EOA"
-        recommendedNonce={0}
         onSend={vi.fn(async () => ({ success: true }))}
         onBack={vi.fn()}
         onRefresh={vi.fn()}
@@ -82,7 +80,6 @@ describe('SendForm UI', () => {
         tokens={chain.tokens}
         balances={{ NATIVE: '1.00', [chain.tokens[0].address.toLowerCase()]: '10.00' }}
         activeAccountType="EOA"
-        recommendedNonce={0}
         onSend={onSend}
         onBack={vi.fn()}
         onRefresh={vi.fn()}
@@ -116,7 +113,6 @@ describe('SendForm UI', () => {
           [chain.tokens[0].address.toLowerCase()]: '9007199254740992.000000'
         }}
         activeAccountType="EOA"
-        recommendedNonce={0}
         onSend={vi.fn(async () => ({ success: true }))}
         onBack={vi.fn()}
         onRefresh={vi.fn()}
