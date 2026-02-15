@@ -95,7 +95,7 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
 
   return (
     <div className={`animate-tech-in ${isDock ? 'space-y-3 p-3' : 'space-y-6'}`}>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex items-center">
           {mode === 'page' && onBack && (
             <button
@@ -185,11 +185,11 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="mt-2 text-sm font-black text-slate-900 truncate">
-                          {e.action || t('console.action_unknown')}
-                        </div>
-                        <div className="mt-1 text-[10px] text-slate-400 font-mono truncate">
+                        <div className="text-xs font-mono text-slate-500 truncate">
                           {e.host}
+                        </div>
+                        <div className="mt-1 text-sm font-black text-slate-900 truncate">
+                          {e.action || t('console.action_unknown')}
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
@@ -263,14 +263,14 @@ export const ConsoleView: React.FC<{ onBack?: () => void; onMinimize?: () => voi
 
                 <div className="space-y-2">
                   <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">{t('console.request')}</div>
-                  <pre className="text-[11px] leading-relaxed font-mono bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-auto">
+                  <pre className="text-[11px] leading-relaxed font-mono bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-auto max-h-[22vh]">
 {safeStringify(selected.requestBody)}
                   </pre>
                 </div>
 
                 <div className="space-y-2">
                   <div className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">{t('console.response')}</div>
-                  <pre className="text-[11px] leading-relaxed font-mono bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-auto">
+                  <pre className="text-[11px] leading-relaxed font-mono bg-slate-50 border border-slate-200 rounded-xl p-3 overflow-auto max-h-[22vh]">
 {safeStringify(selected.responseBody)}
                   </pre>
                 </div>

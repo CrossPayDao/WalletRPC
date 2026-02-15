@@ -38,7 +38,7 @@ const HttpConsoleContext = createContext<HttpConsoleContextValue | null>(null);
 
 // Keep a large rolling buffer for UX while protecting memory on long sessions.
 const MAX_EVENTS = 5000;
-const MAX_BODY_CHARS = 2000;
+const MAX_BODY_CHARS = 4000;
 
 const clip = (s: string, max: number): string => (s.length > max ? `${s.slice(0, max)}...` : s);
 
@@ -510,6 +510,14 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
               const params = item?.params;
               const actionBase = describeRpcCall(m, params, t);
               const a = withBatchPrefix(actionBase, batchSize, i, t);
+              let responseBody: unknown = undefined;
+              try {
+                // responseText is available for text/json responses (same-origin/CORS permitting)
+                const txt = typeof this.responseText === 'string' ? this.responseText : '';
+                responseBody = safeJsonParse(clip(txt, MAX_BODY_CHARS));
+              } catch {
+                // ignore
+              }
               pushEvent({
                 id: `${start}:${i}:${Math.random().toString(16).slice(2)}`,
                 ts: start,
@@ -520,7 +528,7 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
                 status: this.status || undefined,
                 durationMs,
                 requestBody: redactRpcPayload(item),
-                responseBody: undefined,
+                responseBody,
                 rpcMethod: m,
                 isRpcBatch: true,
                 batchId,
@@ -536,6 +544,13 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
         else if (host && pathname && pathname.startsWith('/wallet')) action = actionForTronPath(pathname, t);
         else action = actionForHttp(method, pathname, t);
 
+        let responseBody: unknown = undefined;
+        try {
+          const txt = typeof this.responseText === 'string' ? this.responseText : '';
+          responseBody = safeJsonParse(clip(txt, MAX_BODY_CHARS));
+        } catch {
+          // ignore
+        }
         pushEvent({
           id: `${start}:${Math.random().toString(16).slice(2)}`,
           ts: start,
@@ -546,7 +561,7 @@ export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ c
           status: this.status || undefined,
           durationMs,
           requestBody: category === 'rpc' ? redactRpcPayload(parsedBody) : parsedBody,
-          responseBody: undefined,
+          responseBody,
           rpcMethod: rpcMeta.rpcMethod,
           isRpcBatch: rpcMeta.isBatch,
           action
