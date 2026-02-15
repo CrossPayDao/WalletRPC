@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ethers } from 'ethers';
 import { useWalletStorage } from './useWalletStorage';
 import { useWalletState } from './useWalletState';
@@ -9,6 +9,7 @@ import { useSafeManager } from './useSafeManager';
 import { ChainConfig, TokenConfig } from '../types';
 import { ERC20_ABI } from '../config';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { TronService } from '../../../services/tronService';
 
 /**
  * 【核心技术：带缓存的智能 RPC 提供者 (Memoized RPC Provider)】
@@ -105,11 +106,14 @@ export const useEvmWallet = () => {
   const initialChainId = chains.length > 0 ? chains[0].id : 1;
   const state = useWalletState(initialChainId);
   const { 
-    wallet, tronPrivateKey, activeAccountType, setActiveAccountType, activeSafeAddress, setActiveSafeAddress,
+    wallet, tronPrivateKey, tronWalletAddress, activeAccountType, setActiveAccountType, activeSafeAddress, setActiveSafeAddress,
     activeChainId, setActiveChainId, view, setView, setError, setNotification,
     setTokenToEdit, setIsChainModalOpen, setIsAddTokenModalOpen,
     clearSession, setIsMenuOpen, setIsLoading,
   } = state;
+
+  const autoDetectRanRef = useRef(false);
+  const [isAutoDetectingChain, setIsAutoDetectingChain] = useState(false);
 
   const activeChain = useMemo(() => {
     return chains.find(c => c.id === activeChainId) || chains[0];
@@ -172,13 +176,78 @@ export const useEvmWallet = () => {
     }
   }, [safeMgr?.handleSafeProposal]);
 
+  // During the intro animation we may auto-detect which chain has assets.
+  // To avoid a "double fetch" (default chain then detected chain), we gate the initial fetch until detection completes.
   useEffect(() => {
     const isCoreView = view === 'intro_animation' || view === 'dashboard';
-    if (wallet && isCoreView) {
+    if (wallet && isCoreView && !isAutoDetectingChain) {
       fetchData(false);
       if (activeChain.chainType !== 'TRON') txMgr.syncNonce();
     }
-  }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChain.chainType]);
+  }, [activeChainId, activeAccountType, activeSafeAddress, wallet, view, activeChain.chainType, isAutoDetectingChain]);
+
+  useEffect(() => {
+    const run = async () => {
+      // Only run right after import, while the intro animation is playing, in EOA context.
+      if (!wallet) return;
+      if (view !== 'intro_animation') return;
+      if (activeAccountType !== 'EOA') return;
+      if (autoDetectRanRef.current) return;
+      autoDetectRanRef.current = true;
+
+      // If we can't derive addresses or chains are empty, just let normal fetch proceed.
+      if (!chains || chains.length === 0) return;
+      const evmAddr = wallet.address;
+      const tronAddr = tronWalletAddress;
+      if (!evmAddr && !tronAddr) return;
+
+      setIsAutoDetectingChain(true);
+      try {
+        // Prefer the currently selected chain first to minimize surprises.
+        const ordered = [
+          ...(chains.find((c) => c.id === activeChainId) ? [chains.find((c) => c.id === activeChainId)!] : []),
+          ...chains.filter((c) => c.id !== activeChainId)
+        ];
+
+        const withTimeout = async <T,>(p: Promise<T>, ms: number): Promise<T> => {
+          return await Promise.race([
+            p,
+            new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+          ]);
+        };
+
+        for (const c of ordered) {
+          try {
+            if (c.chainType === 'TRON') {
+              if (!tronAddr || !c.defaultRpcUrl) continue;
+              const host = TronService.normalizeHost(c.defaultRpcUrl);
+              const balSun = await withTimeout(TronService.getBalance(host, tronAddr), 5000);
+              if (typeof balSun === 'bigint' && balSun > 0n) {
+                if (c.id !== activeChainId) setActiveChainId(c.id);
+                return;
+              }
+              continue;
+            }
+
+            if (!c.defaultRpcUrl) continue;
+            const network = ethers.Network.from(c.id);
+            const p = new ethers.JsonRpcProvider(c.defaultRpcUrl, network, { staticNetwork: network });
+            const balWei = await withTimeout(p.getBalance(evmAddr), 5000);
+            if (typeof balWei === 'bigint' && balWei > 0n) {
+              if (c.id !== activeChainId) setActiveChainId(c.id);
+              return;
+            }
+          } catch {
+            // Ignore this chain and continue probing the next.
+          }
+        }
+      } finally {
+        setIsAutoDetectingChain(false);
+      }
+    };
+
+    run();
+  }, [wallet, tronWalletAddress, chains, view, activeAccountType, activeChainId, setActiveChainId]);
 
   const handleSaveChain = (config: ChainConfig) => {
     setChains(prev => prev.map(c => c.id === config.id ? { ...config, isCustom: true } : c));
