@@ -142,4 +142,42 @@ describe('useWalletState', () => {
 
     vi.useRealTimers();
   });
+
+  it('同一条错误最多展示 10 秒（到达上限后不再续命）', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-15T00:00:00.000Z'));
+    const { result } = renderHook(() => useWalletState(1), { wrapper: LanguageProvider });
+
+    act(() => {
+      result.current.setError('CAP_ERROR');
+    });
+    const first = result.current.errorObject!;
+    expect(first.expiresAt).toBe(first.shownAt + 5000);
+
+    // 1s 后续命：expiresAt => shownAt+6s
+    act(() => {
+      vi.advanceTimersByTime(1000);
+      result.current.setError('CAP_ERROR');
+    });
+    const second = result.current.errorObject!;
+    expect(second.expiresAt).toBe(second.shownAt + 6000);
+
+    // 再推进到接近 10s 上限后续命：expiresAt 不应超过 shownAt+10s
+    act(() => {
+      vi.advanceTimersByTime(4500); // now = shownAt+5.5s
+      result.current.setError('CAP_ERROR');
+    });
+    const third = result.current.errorObject!;
+    expect(third.expiresAt).toBe(third.shownAt + 10000);
+
+    // 即使继续触发，同样不应超过上限
+    act(() => {
+      vi.advanceTimersByTime(500);
+      result.current.setError('CAP_ERROR');
+    });
+    const fourth = result.current.errorObject!;
+    expect(fourth.expiresAt).toBe(fourth.shownAt + 10000);
+
+    vi.useRealTimers();
+  });
 });

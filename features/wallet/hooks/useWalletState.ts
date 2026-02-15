@@ -30,6 +30,8 @@ export const useWalletState = (initialChainId: number) => {
   const ERROR_DISPLAY_MS = 5000;
   // 去重冷却：同样错误在该窗口内重复触发，不重复“弹出”，只延长展示时长
   const ERROR_DEDUPE_COOLDOWN_MS = 1500;
+  // 为避免错误提示“无限续命”导致用户无法操作，限制同一条错误最多展示 10 秒
+  const ERROR_MAX_VISIBLE_MS = 10000;
   type WalletErrorObject = {
     message: string;
     shownAt: number;
@@ -61,11 +63,18 @@ export const useWalletState = (initialChainId: number) => {
       return;
     }
     setErrorObject((prev) => {
-      if (prev && prev.message === msg && now - prev.lastEventAt <= ERROR_DEDUPE_COOLDOWN_MS) {
+      // 只要同一条错误仍在展示期内，就不要重复“弹出”；仅续命并累计次数。
+      // 额外保留一个小的冷却窗口，用于覆盖极端情况下的近同时触发。
+      if (
+        prev &&
+        prev.message === msg &&
+        (now < prev.expiresAt || now - prev.lastEventAt <= ERROR_DEDUPE_COOLDOWN_MS)
+      ) {
+        const maxExpiresAt = prev.shownAt + ERROR_MAX_VISIBLE_MS;
         return {
           ...prev,
           lastEventAt: now,
-          expiresAt: now + ERROR_DISPLAY_MS,
+          expiresAt: Math.min(now + ERROR_DISPLAY_MS, maxExpiresAt),
           count: prev.count + 1
         };
       }
@@ -73,7 +82,7 @@ export const useWalletState = (initialChainId: number) => {
         message: msg,
         shownAt: now,
         lastEventAt: now,
-        expiresAt: now + ERROR_DISPLAY_MS,
+        expiresAt: Math.min(now + ERROR_DISPLAY_MS, now + ERROR_MAX_VISIBLE_MS),
         count: 1
       };
     });
