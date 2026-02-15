@@ -191,6 +191,85 @@ describe('Safe views UI', () => {
     }
   });
 
+  it('SafeSettings 若在上一笔操作后不再是 owner，则 queued 操作应转为无权限错误', async () => {
+    vi.useFakeTimers();
+    try {
+      const onRemoveOwner = vi.fn(async () => true);
+
+      const baseSafeDetails = {
+        owners: [
+          '0x1111111111111111111111111111111111111111',
+          '0x2222222222222222222222222222222222222222'
+        ],
+        threshold: 1,
+        nonce: 0
+      };
+
+      const { rerender } = wrap(
+        <SafeSettings
+          safeDetails={baseSafeDetails}
+          walletAddress="0x1111111111111111111111111111111111111111"
+          onRemoveOwner={onRemoveOwner}
+          onAddOwner={vi.fn(async () => true)}
+          onChangeThreshold={vi.fn(async () => true)}
+          onRefreshSafeDetails={vi.fn(async () => {})}
+          onBack={vi.fn()}
+        />
+      );
+
+      // 第一笔：删除自己（会进入 scanning）
+      const selfRowRemoveBtn = screen.getAllByRole('button').find((b) => {
+        const svg = b.querySelector('svg');
+        return !!svg && svg.className.baseVal.includes('lucide-trash2');
+      });
+      // 找不到删除按钮就直接调用 removal 流程：点击第一个可删除条目（对测试更稳定）
+      // 这里通过点击列表中第二个 owner 的删除按钮触发流程，随后我们用 rerender 来模拟“自己已被删除”。
+      if (selfRowRemoveBtn) fireEvent.click(selfRowRemoveBtn);
+
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+        await Promise.resolve();
+      });
+
+      // 第二笔：删除其他人，应进入 queued
+      // 由于第 1 笔处于 in-flight，点击第二个 owner 删除会进入 queued
+      const allTrashButtons = Array.from(document.querySelectorAll('button')).filter((b) => {
+        const svg = b.querySelector('svg');
+        return !!svg && svg.className.baseVal.includes('lucide-trash2');
+      });
+      if (allTrashButtons.length > 0) {
+        fireEvent.click(allTrashButtons[allTrashButtons.length - 1]);
+      }
+      expect(screen.getByText('Queued')).toBeInTheDocument();
+
+      // 模拟第一笔完成：owners 不再包含自己，触发 isOwner=false
+      rerender(
+        <LanguageProvider>
+          <SafeSettings
+            safeDetails={{
+              ...baseSafeDetails,
+              owners: ['0x2222222222222222222222222222222222222222']
+            }}
+            walletAddress="0x1111111111111111111111111111111111111111"
+            onRemoveOwner={onRemoveOwner}
+            onAddOwner={vi.fn(async () => true)}
+            onChangeThreshold={vi.fn(async () => true)}
+            onRefreshSafeDetails={vi.fn(async () => {})}
+            onBack={vi.fn()}
+          />
+        </LanguageProvider>
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText(/Access Denied|无权限/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('CreateSafe 会过滤空 owner 并提交', async () => {
     const user = userEvent.setup();
     const onDeploy = vi.fn();

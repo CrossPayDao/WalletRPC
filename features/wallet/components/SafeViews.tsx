@@ -52,6 +52,21 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     return safeDetails.owners.some(o => o.toLowerCase() === walletAddress.toLowerCase());
   }, [safeDetails.owners, walletAddress]);
 
+  // 如果用户在上一笔操作中把自己移出了 owners，则后续 queued 操作不可能继续执行，必须显式失败（避免永远排队）。
+  useEffect(() => {
+    if (safeDetails.threshold !== 1) return;
+    if (isOwner) return;
+    setOptimisticOps((prev) => {
+      let changed = false;
+      const next = prev.map((op) => {
+        if (op.step !== 'queued') return op;
+        changed = true;
+        return { ...op, step: 'error' as const, error: t('safe.op_access_denied') };
+      });
+      return changed ? next : prev;
+    });
+  }, [isOwner, safeDetails.threshold, t]);
+
   useEffect(() => {
     refreshRef.current = onRefreshSafeDetails;
   }, [onRefreshSafeDetails]);
