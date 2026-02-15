@@ -39,8 +39,15 @@ export const getExplorerAddressLink = (chain: ChainConfig, address: string) => {
 export const handleTxError = (e: any, t?: (key: string) => string) => {
   console.error(e);
   if (typeof e === 'string') return e;
-  
-  const msgRaw: string = String(e?.shortMessage || e?.message || e?.error?.message || e?.reason || '');
+
+  const primaryMsg: string = String(e?.shortMessage || e?.message || '');
+  let msgRaw: string = primaryMsg;
+  // ethers v6 经常把底层 JSON-RPC 错误包成 "could not coalesce error"
+  // 这种情况下优先展示更有意义的底层 message。
+  if (!msgRaw || msgRaw.toLowerCase().includes('could not coalesce error')) {
+    const secondaryMsg: string = String(e?.error?.message || e?.info?.error?.message || e?.reason || '');
+    if (secondaryMsg) msgRaw = secondaryMsg;
+  }
   const msg = msgRaw.toLowerCase();
   const code = e?.code ?? e?.error?.code ?? e?.info?.error?.code ?? e?.info?.statusCode ?? e?.status ?? e?.response?.status;
   const jsonRpcCode = e?.error?.code ?? e?.info?.error?.code;
@@ -84,6 +91,7 @@ export const handleTxError = (e: any, t?: (key: string) => string) => {
   if (jsonRpcCode === -32601 || has('method not found')) return t ? t('tx.err_rpc_method_not_found') : 'RPC method not found.';
   if (jsonRpcCode === -32602 || has('invalid params')) return t ? t('tx.err_rpc_invalid_params') : 'Invalid params.';
   if (jsonRpcCode === -32603 || has('internal error')) return t ? t('tx.err_rpc_internal_error') : 'RPC internal error.';
+  if (jsonRpcCode === -32005 || jsonRpcCode === -32016) return t ? t('tx.err_rpc_rate_limited') : 'Rate limited.';
 
   // Safe specific
   if (has('gs013')) return t ? t('tx.err_safe_gs013') : "Safe Transaction Failed (GS013). Check Safe funds or gas limits.";

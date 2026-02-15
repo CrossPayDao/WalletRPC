@@ -5,6 +5,7 @@ import { TronService } from '../../../services/tronService';
 import { ERC20_ABI, SAFE_ABI } from '../config';
 import { SafeDetails, ChainConfig, TokenConfig } from '../types';
 import { useTranslation } from '../../../contexts/LanguageContext';
+import { handleTxError } from '../utils';
 
 /**
  * 【数据抓取引擎 - 高可靠同步版】
@@ -167,8 +168,16 @@ export const useWalletData = ({
 
         setTokenBalances(currentBalances);
       }
-    } catch {
-      setError(t('wallet.data_sync_fault'));
+    } catch (e: unknown) {
+      // 尽量把 RPC/网络错误具体化（仍保持可本地化）
+      const normalized = handleTxError(e as any, t);
+      // handleTxError 的最终兜底可能偏“交易语义”，此处回退到数据同步通用提示
+      const fallback = t('wallet.data_sync_fault');
+      const msg =
+        normalized === (t ? t('tx.err_transaction_failed') : 'Transaction failed')
+          ? fallback
+          : normalized || fallback;
+      setError(msg);
     } finally {
       if (requestId === requestIdRef.current) {
         setIsLoading(false);

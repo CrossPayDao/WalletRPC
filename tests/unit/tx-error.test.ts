@@ -30,6 +30,11 @@ describe('handleTxError', () => {
     expect(handleTxError({ error: { code: -32603, message: 'internal error' } }, t)).toBe('tx.err_rpc_internal_error');
   });
 
+  it('应能从 could not coalesce error 中提取底层错误并映射', () => {
+    const t = (k: string) => k;
+    expect(handleTxError({ message: 'could not coalesce error', error: { code: -32005, message: 'rate limited' } }, t)).toBe('tx.err_rpc_rate_limited');
+  });
+
   it('兜底返回 message 并截断', () => {
     const long = 'x'.repeat(200);
     expect(handleTxError({ message: long }).length).toBeLessThanOrEqual(153);

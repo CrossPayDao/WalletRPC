@@ -19,8 +19,9 @@ test.describe('Error UX', () => {
       await refresh.click();
     }
 
-    const msg = page.getByText(/Data synchronization fault|数据同步故障/i);
-    await expect(msg).toBeVisible({ timeout: 10000 });
-    await expect(msg).toHaveCount(1);
+    // 具体文案可能因错误归一化而变化，但 UX 要求是“只出现一条错误提示”
+    const alert = page.getByRole('alert');
+    await expect(alert).toBeVisible({ timeout: 10000 });
+    await expect(alert).toHaveCount(1);
   });
 });
