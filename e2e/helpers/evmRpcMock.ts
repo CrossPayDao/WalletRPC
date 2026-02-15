@@ -19,6 +19,12 @@ const toRpcResponse = (id: unknown, result: unknown) => ({
   result
 });
 
+const toRpcError = (id: unknown, code: number, message: string) => ({
+  jsonrpc: '2.0',
+  id,
+  error: { code, message }
+});
+
 const mockEthCall = (params: any[]): string => {
   const call = params?.[0] || {};
   const target = String(call?.to || '').toLowerCase();
@@ -175,6 +181,84 @@ export const installBttcRpcMock = async (page: Page) => {
       await fulfillRpc(route, body);
     } catch {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(toRpcResponse(1, '0x1')) });
+    }
+  });
+};
+
+export const installBttcRpcHttpErrorMock = async (page: Page, status: number = 429) => {
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = request.url();
+    if (!url.includes(BTTC_RPC_HOST)) {
+      await route.continue();
+      return;
+    }
+
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'POST, OPTIONS',
+          'access-control-allow-headers': 'content-type'
+        }
+      });
+      return;
+    }
+
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: `mock http ${status}` })
+    });
+  });
+};
+
+export const installBttcRpcJsonRpcErrorMock = async (
+  page: Page,
+  code: number = -32005,
+  message: string = 'rate limited'
+) => {
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = request.url();
+    if (!url.includes(BTTC_RPC_HOST)) {
+      await route.continue();
+      return;
+    }
+
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'POST, OPTIONS',
+          'access-control-allow-headers': 'content-type'
+        }
+      });
+      return;
+    }
+
+    if (request.method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+
+    try {
+      const body = request.postDataJSON();
+      if (Array.isArray(body)) {
+        const response = body.map((item) => toRpcError(item?.id, code, message));
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(response) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(toRpcError(body?.id, code, message)) });
+    } catch {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(toRpcError(1, code, message)) });
     }
   });
 };
