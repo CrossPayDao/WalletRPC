@@ -97,6 +97,7 @@ export const useTransactionManager = ({
   };
 
   const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+  const transactionsRef = useRef<TransactionRecord[]>([]);
   const postConfirmRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollingMetaRef = useRef<Map<string, { startedAt: number; attempts: number; nextPollAt: number }>>(new Map());
   
@@ -115,6 +116,10 @@ export const useTransactionManager = ({
   useEffect(() => {
     localNonceRef.current = null;
   }, [wallet?.address, activeChainId, provider, activeAccountType]);
+
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
 
   /**
    * 同步 Nonce 状态（仅在初始化或错误恢复时调用）
@@ -173,20 +178,20 @@ export const useTransactionManager = ({
    * 1. 只对 status === 'submitted' 的交易进行 getTransactionReceipt。
    * 2. 采用 5s 节流，避免在区块生成间隔内产生无效请求。
    */
+  const currentChainId = Number(activeChainId);
+  const hasPending = transactions.some(
+    (tx) => tx.status === 'submitted' && Number(tx.chainId) === currentChainId && !!tx.hash
+  );
+
   useEffect(() => {
-    const currentId = Number(activeChainId);
-    const hasPending = transactions.some(
-      (tx) => tx.status === 'submitted' && Number(tx.chainId) === currentId && !!tx.hash
-    );
     if (!hasPending) return;
+    const chainType = activeChain.chainType;
+    const tronHost = activeChain.defaultRpcUrl;
 
     const interval = setInterval(async () => {
       const now = Date.now();
-      const pending = transactions.filter(
-        (tx) =>
-          tx.status === 'submitted' &&
-          Number(tx.chainId) === currentId &&
-          !!tx.hash
+      const pending = transactionsRef.current.filter(
+        (tx) => tx.status === 'submitted' && Number(tx.chainId) === currentChainId && !!tx.hash
       );
 
       if (pending.length === 0) return;
@@ -230,12 +235,12 @@ export const useTransactionManager = ({
 
       let validUpdates: Array<{ id: string; status: 'confirmed' | 'failed' }> = [];
 
-      if (activeChain.chainType === 'TRON') {
+      if (chainType === 'TRON') {
         const updates = await Promise.all(
           dueToPoll.map(async (tx) => {
             if (!tx.hash) return null;
             try {
-              const info = await TronService.getTransactionInfo(activeChain.defaultRpcUrl, tx.hash);
+              const info = await TronService.getTransactionInfo(tronHost, tx.hash);
               if (!info.found) return null;
               const status = info.success === false ? 'failed' : 'confirmed';
               return { id: tx.id, status } as const;
@@ -307,7 +312,15 @@ export const useTransactionManager = ({
     }, RECEIPT_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [provider, transactions, activeChain, activeChainId, schedulePostConfirmRefresh, t]);
+  }, [
+    provider,
+    activeChain.chainType,
+    activeChain.defaultRpcUrl,
+    currentChainId,
+    hasPending,
+    schedulePostConfirmRefresh,
+    t
+  ]);
 
   /**
    * 处理各种交易类型的提议与发送
