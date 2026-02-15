@@ -1,4 +1,3 @@
-import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import type { ChainConfig, TokenConfig } from '../../features/wallet/types';
@@ -51,4 +50,3 @@ describe('useWalletData', () => {
     expect(msg).not.toMatch(/Data synchronization fault|数据同步故障/i);
   });
 });
-
