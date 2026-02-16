@@ -208,4 +208,65 @@ describe('TronFinanceView UI', () => {
     await user.click(btn);
     expect(manager.retryFailedStep).toHaveBeenCalled();
   });
+
+  it('action 状态为 signing/submitted/failed 时展示对应状态与 txid', () => {
+    const managerSigning = createManager();
+    managerSigning.action = { phase: 'signing', step: 'STAKE_RESOURCE' };
+    const first = wrap(<TronFinanceView activeChain={tronChain} onBack={vi.fn()} manager={managerSigning} />);
+    expect(screen.getByText(/待签名 STAKE_RESOURCE/)).toBeInTheDocument();
+    first.unmount();
+
+    const managerSubmitted = createManager();
+    managerSubmitted.action = { phase: 'submitted', step: 'VOTE_WITNESS', txid: '0xsub' };
+    const second = wrap(<TronFinanceView activeChain={tronChain} onBack={vi.fn()} manager={managerSubmitted} />);
+    expect(screen.getByText(/已提交 VOTE_WITNESS/)).toBeInTheDocument();
+    expect(screen.getByText(/txid:\s*0xsub/)).toBeInTheDocument();
+    second.unmount();
+
+    const managerFailed = createManager();
+    managerFailed.action = { phase: 'failed', error: 'boom' };
+    const third = wrap(<TronFinanceView activeChain={tronChain} onBack={vi.fn()} manager={managerFailed} />);
+    expect(screen.getByText(/失败:\s*boom/)).toBeInTheDocument();
+    third.unmount();
+  });
+
+  it('one-click 默认步骤展示待执行，并在可执行时携带参数调用 runOneClick', async () => {
+    const manager = createManager();
+    manager.oneClickProgress = undefined;
+    const user = userEvent.setup();
+    wrap(<TronFinanceView activeChain={tronChain} onBack={vi.fn()} manager={manager} />);
+
+    await user.click(screen.getByRole('button', { name: '闭环快捷' }));
+    expect(await screen.findByText(/1\.\s*领取奖励/)).toBeInTheDocument();
+    expect(screen.getAllByText('待执行').length).toBeGreaterThan(0);
+
+    const stakeInput = screen.getByPlaceholderText('Stake TRX amount');
+    await user.type(stakeInput, '1.25');
+    await user.selectOptions(screen.getByRole('combobox'), 'BANDWIDTH');
+    await user.click(screen.getByRole('button', { name: '执行闭环快捷' }));
+
+    expect(manager.runOneClick).toHaveBeenCalledWith({
+      resource: 'BANDWIDTH',
+      stakeAmountSun: 1250000n,
+      votes: []
+    });
+  });
+
+  it('one-click 在 submitted 阶段禁用执行并展示处理中消息', async () => {
+    const manager = createManager();
+    manager.action = { phase: 'submitted', step: 'STAKE_RESOURCE' };
+    manager.oneClickProgress = {
+      stage: 'stake',
+      active: true,
+      skippedClaim: false,
+      message: '质押已提交',
+      steps: []
+    };
+    const user = userEvent.setup();
+    wrap(<TronFinanceView activeChain={tronChain} onBack={vi.fn()} manager={manager} />);
+
+    await user.click(screen.getByRole('button', { name: '闭环快捷' }));
+    const busyBtn = screen.getByRole('button', { name: /处理中：质押已提交/ });
+    expect(busyBtn).toBeDisabled();
+  });
 });

@@ -301,4 +301,105 @@ describe('Safe views UI', () => {
     await user.click(screen.getByRole('button', { name: 'INITIATE_WATCHLIST_SYNC' }));
     expect(onTrack).toHaveBeenCalledWith('0x000000000000000000000000000000000000dEaD');
   });
+
+  it('TrackSafe 对空输入、长度错误与格式错误分别报错', async () => {
+    const user = userEvent.setup();
+    const onTrack = vi.fn();
+    wrap(<TrackSafe onTrack={onTrack} onCancel={vi.fn()} isLoading={false} />);
+
+    const submitBtn = screen.getByRole('button', { name: 'INITIATE_WATCHLIST_SYNC' });
+    const input = screen.getByPlaceholderText('0x...');
+    await user.type(input, '0x1234');
+    await user.click(submitBtn);
+    expect(document.querySelector('.text-red-600')).toBeTruthy();
+
+    await user.clear(input);
+    await user.type(input, '0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz');
+    await user.click(submitBtn);
+    expect(document.querySelector('.text-red-600')).toBeTruthy();
+    expect(onTrack).not.toHaveBeenCalled();
+  });
+
+  it('CreateSafe 删除唯一 owner 后会进入空状态并可添加首个成员', async () => {
+    const user = userEvent.setup();
+    const onDeploy = vi.fn();
+    wrap(<CreateSafe onDeploy={onDeploy} onCancel={vi.fn()} isDeploying={false} walletAddress="0x1111111111111111111111111111111111111111" />);
+
+    const trashBtns = Array.from(document.querySelectorAll('button')).filter((b) => {
+      const svg = b.querySelector('svg');
+      return !!svg && svg.className.baseVal.includes('lucide-trash2');
+    });
+    expect(trashBtns.length).toBeGreaterThan(0);
+    await user.click(trashBtns[0] as HTMLButtonElement);
+
+    expect(screen.getByText('No owners specified')).toBeInTheDocument();
+    const deployBtn = screen.getByRole('button', { name: 'EXECUTE_DEPLOYMENT_SIG' });
+    expect(deployBtn).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Add First Owner' }));
+    expect(screen.getByPlaceholderText('0x...')).toBeInTheDocument();
+  });
+
+  it('SafeSettings 在非 owner 情况下提议新增成员会被拒绝', async () => {
+    const user = userEvent.setup();
+    const onAddOwner = vi.fn(async () => true);
+    wrap(
+      <SafeSettings
+        safeDetails={{
+          owners: ['0x2222222222222222222222222222222222222222'],
+          threshold: 1,
+          nonce: 0
+        }}
+        walletAddress="0x1111111111111111111111111111111111111111"
+        onRemoveOwner={vi.fn(async () => true)}
+        onAddOwner={onAddOwner}
+        onChangeThreshold={vi.fn(async () => true)}
+        onBack={vi.fn()}
+      />
+    );
+
+    await user.type(screen.getByPlaceholderText('0x...'), '0x3333333333333333333333333333333333333333');
+    await user.click(screen.getByRole('button', { name: 'PROPOSE' }));
+    expect(await screen.findByText(/Access Denied|无权限/i)).toBeInTheDocument();
+    expect(onAddOwner).not.toHaveBeenCalled();
+  });
+
+  it('SafeSettings 删除成员时会用收敛后的阈值调用 onRemoveOwner', async () => {
+    vi.useFakeTimers();
+    try {
+      const onRemoveOwner = vi.fn(async () => true);
+      wrap(
+        <SafeSettings
+          safeDetails={{
+            owners: [
+              '0x1111111111111111111111111111111111111111',
+              '0x2222222222222222222222222222222222222222'
+            ],
+            threshold: 2,
+            nonce: 0
+          }}
+          walletAddress="0x1111111111111111111111111111111111111111"
+          onRemoveOwner={onRemoveOwner}
+          onAddOwner={vi.fn(async () => true)}
+          onChangeThreshold={vi.fn(async () => true)}
+          onBack={vi.fn()}
+        />
+      );
+
+      const trashBtns = Array.from(document.querySelectorAll('button')).filter((b) => {
+        const svg = b.querySelector('svg');
+        return !!svg && svg.className.baseVal.includes('lucide-trash2');
+      });
+      expect(trashBtns.length).toBeGreaterThan(0);
+      fireEvent.click(trashBtns[0] as HTMLButtonElement);
+
+      await act(async () => {
+        vi.advanceTimersByTime(650);
+        await Promise.resolve();
+      });
+      expect(onRemoveOwner).toHaveBeenCalledWith(expect.any(String), 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
