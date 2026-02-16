@@ -250,6 +250,21 @@ const actionForHttp = (method: string, pathname: string, t: (k: string) => strin
   return t('console.intent_http_request');
 };
 
+export const __HTTP_CONSOLE_TEST__ = {
+  clip,
+  safeJsonParse,
+  toTextBody,
+  redactRpcPayload,
+  deriveRpcMeta,
+  getSelector,
+  describeEthCall,
+  describeRpcCall,
+  withBatchPrefix,
+  actionForRpc,
+  actionForTronPath,
+  actionForHttp
+};
+
 export const HttpConsoleProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { t } = useTranslation();
   const [enabled, setEnabled] = useState(false);

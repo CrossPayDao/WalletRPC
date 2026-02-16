@@ -96,6 +96,8 @@ class DeduplicatingJsonRpcProvider extends ethers.JsonRpcProvider {
   }
 }
 
+export { DeduplicatingJsonRpcProvider };
+
 export const useEvmWallet = () => {
   const { t } = useTranslation();
   const storage = useWalletStorage();

@@ -1,4 +1,6 @@
-const getEnv = (): any => (import.meta as any).env;
+const defaultEnvGetter = (): any => (import.meta as any).env;
+let envGetter = defaultEnvGetter;
+const getEnv = (): any => envGetter();
 
 const isQuietMode = (): boolean => {
   const env = getEnv();
@@ -22,3 +24,11 @@ export const devError = (...args: unknown[]) => {
   console.error(...args);
 };
 
+export const __LOGGER_TEST__ = {
+  setEnvGetter: (getter: () => any) => {
+    envGetter = getter;
+  },
+  resetEnvGetter: () => {
+    envGetter = defaultEnvGetter;
+  }
+};

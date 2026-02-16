@@ -152,6 +152,14 @@ const tryDecodeBase64Ascii = (s: unknown): string | null => {
   }
 };
 
+const clearWitnessCache = () => {
+  tronWitnessCache.clear();
+};
+
+const getWitnessCacheSize = () => {
+  return tronWitnessCache.size;
+};
+
 /**
  * 【设计亮点：轻量级协议桥接器 (Adapter Pattern)】
  * 
@@ -676,4 +684,20 @@ export const TronService = {
     finalBytes.set(checksum, bytes.length);
     return bs58.encode(finalBytes);
   }
+};
+
+export const __TRON_TEST__ = {
+  bytesToHex,
+  fetchWithTimeout,
+  postJson,
+  postJsonFirstSuccess,
+  toTxPayload,
+  parseApiError,
+  signAndBroadcast,
+  toResource,
+  toSafeAmountNumber,
+  tryDecodeHexAscii,
+  tryDecodeBase64Ascii,
+  clearWitnessCache,
+  getWitnessCacheSize
 };

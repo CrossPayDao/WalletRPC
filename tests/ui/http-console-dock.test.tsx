@@ -272,4 +272,133 @@ describe('HttpConsole dock', () => {
     await user.click(await screen.findByRole('button', { name: /Broadcast transaction|广播交易/i }));
     expect(await screen.findByText(/\[redacted\]/i)).toBeTruthy();
   });
+
+  it('batch RPC 在响应非数组与 item 缺少 method 时仍应记录事件', async () => {
+    (globalThis as any).fetch = vi.fn(async () => ({
+      status: 200,
+      clone: () => ({ text: async () => JSON.stringify({ not: 'array' }) }),
+      text: async () => JSON.stringify({ not: 'array' })
+    }));
+
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+    await user.click(screen.getByText('open'));
+
+    await act(async () => {
+      await (window.fetch as any)('https://rpc.example', {
+        method: 'POST',
+        body: JSON.stringify([
+          { jsonrpc: '2.0', id: 1, params: [] },
+          { jsonrpc: '2.0', id: 2, method: 'eth_getBalance', params: ['0x1', 'latest'] }
+        ])
+      });
+    });
+
+    const rows = await screen.findAllByText(/Batch\(2\)|批请求\(2\)/);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('事件数量超过上限时应裁剪到 5000 条', async () => {
+    (globalThis as any).fetch = vi.fn(async () => ({
+      status: 200,
+      clone: () => ({ text: async () => '{}' }),
+      text: async () => '{}'
+    }));
+
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+    await user.click(screen.getByText('open'));
+    await user.click(screen.getByLabelText('console-minimize'));
+
+    await act(async () => {
+      for (let i = 0; i < 5005; i++) {
+        await (window.fetch as any)(`https://site.test/asset-${i}.js`, { method: 'GET' });
+      }
+    });
+
+    expect(await screen.findByText('5000')).toBeTruthy();
+  });
+
+  it('batch RPC 请求失败时也应拆分记录错误事件', async () => {
+    (globalThis as any).fetch = vi.fn(async () => {
+      throw new Error('batch boom');
+    });
+
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+    await user.click(screen.getByText('open'));
+
+    await act(async () => {
+      await expect(
+        (window.fetch as any)('https://rpc.example', {
+          method: 'POST',
+          body: JSON.stringify([
+            { jsonrpc: '2.0', id: 1, method: 'eth_chainId', params: [] },
+            { jsonrpc: '2.0', id: 2, method: 'eth_getBlockByNumber', params: ['latest', false] }
+          ])
+        })
+      ).rejects.toThrow('batch boom');
+    });
+
+    const rows = await screen.findAllByText(/Batch\(2\)|批请求\(2\)/);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('XHR 单条 RPC 请求应记录语义事件', async () => {
+    (globalThis as any).fetch = vi.fn(async () => ({
+      status: 200,
+      clone: () => ({ text: async () => '{}' }),
+      text: async () => '{}'
+    }));
+    const openSpy = vi.spyOn(XMLHttpRequest.prototype, 'open').mockImplementation(function (this: XMLHttpRequest) {
+      return undefined as any;
+    });
+    const sendSpy = vi.spyOn(XMLHttpRequest.prototype, 'send').mockImplementation(function (this: XMLHttpRequest) {
+      Object.defineProperty(this, 'status', { configurable: true, value: 200 });
+      Object.defineProperty(this, 'responseText', {
+        configurable: true,
+        value: JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x1' })
+      });
+      this.dispatchEvent(new Event('loadend'));
+      return undefined as any;
+    });
+
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+    await user.click(screen.getByText('open'));
+
+    await act(async () => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', 'https://rpc.example');
+      xhr.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: ['0xabc'] }));
+    });
+
+    expect(await screen.findByText(/Get receipt|查询回执/)).toBeTruthy();
+    openSpy.mockRestore();
+    sendSpy.mockRestore();
+  });
 });
