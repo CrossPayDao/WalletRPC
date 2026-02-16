@@ -4,7 +4,7 @@ A zero-backend, single-file privacy wallet. No key storage, no ads or tracking, 
 
 WalletRPC is a multi-chain wallet UI that talks directly to blockchain nodes over RPC. It supports key EVM/TRON flows and Safe-style multisig operations without requiring any centralized backend services.
 
-Status: **Beta** (version `0.0.2`).
+Status: **Beta**.
 
 ## Why This Exists
 
