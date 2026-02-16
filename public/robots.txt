@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /docs/
+Disallow: /internal/
+Disallow: /preview/
+Disallow: /releases/
+
+Sitemap: /sitemap.xml

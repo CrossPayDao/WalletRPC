@@ -1,13 +1,14 @@
 {
   "name": "cpcash-wallet-rpc",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:single": "SINGLEFILE=1 vite build && node scripts/build-singlefile.mjs",
     "preview": "vite preview",
+    "check:seo": "node scripts/check-seo.mjs",
     "test": "npm run test:unit && npm run test:ui",
     "test:unit": "find tests/unit -name \"*.test.ts*\" | sort | while read -r f; do npx vitest run \"$f\" || exit 1; done",
     "test:ui": "find tests/ui -name \"*.test.ts*\" | sort | while read -r f; do npx vitest run \"$f\" || exit 1; done",

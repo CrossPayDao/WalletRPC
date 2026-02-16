@@ -1,12 +1,79 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    
-    <title>CPcash Wallet RPC | Secure Node Access</title>
-    <meta name="description" content="Advanced high-performance wallet for EVM and TRON. Manage multisig vaults with lightning-fast RPC connectivity." />
+
+    <title>Wallet RPC | 隐私优先、零遥测、无后台的去中心化多链钱包</title>
+    <meta
+      name="description"
+      content="以隐私为默认的去中心化 RPC 钱包：零遥测、无后台、密钥本地签名，支持 EVM/TRON、SAFE 多签、节点自由切换与自定义 RPC。"
+    />
+    <meta
+      name="keywords"
+      content="隐私钱包,去中心化RPC钱包,零遥测钱包,无后台钱包,本地签名钱包,自托管钱包,多链钱包,EVM钱包,TRON钱包,SAFE多签钱包,自定义RPC,节点切换钱包,privacy wallet,decentralized rpc wallet,zero telemetry wallet,no backend wallet,self-custody wallet,multichain wallet,Safe multisig wallet,EVM TRON wallet"
+    />
+    <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
+    <link rel="canonical" href="https://wallet-rpc.cp.cash/" />
+    <link rel="alternate" hreflang="zh-CN" href="https://wallet-rpc.cp.cash/zh/" />
+    <link rel="alternate" hreflang="en" href="https://wallet-rpc.cp.cash/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://wallet-rpc.cp.cash/" />
+    <meta name="theme-color" content="#0062ff" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta property="og:site_name" content="CPcash Wallet RPC" />
+    <meta property="og:title" content="Wallet RPC | 以隐私为默认的去中心化多链钱包" />
+    <meta
+      property="og:description"
+      content="零遥测、无后台、密钥本地签名。支持 EVM/TRON、SAFE 多签、自定义 RPC 与节点自由切换。"
+    />
+    <meta property="og:url" content="https://wallet-rpc.cp.cash/" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Wallet RPC | Privacy-first Decentralized RPC Wallet" />
+    <meta
+      name="twitter:description"
+      content="Zero telemetry, no backend, local signing. Multi-chain wallet for EVM/TRON with Safe multisig and custom RPC switching."
+    />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "CPcash Wallet RPC",
+            "url": "https://wallet-rpc.cp.cash/",
+            "description": "Privacy-first decentralized RPC wallet with zero telemetry, no backend, and local signing.",
+            "inLanguage": ["en", "zh-CN"],
+            "keywords": "privacy wallet, decentralized rpc wallet, zero telemetry wallet, self-custody wallet, EVM wallet, TRON wallet, Safe multisig wallet"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "CPcash Wallet RPC",
+            "applicationCategory": "FinanceApplication",
+            "operatingSystem": "Web",
+            "description": "Privacy-first decentralized RPC wallet with zero telemetry, no backend, local signing, custom RPC switching, and Safe multisig support.",
+            "url": "https://wallet-rpc.cp.cash/",
+            "privacyPolicy": "https://github.com/CPcashLabs/WalletRPC#security--privacy-model-important",
+            "featureList": [
+              "Zero telemetry and no backend",
+              "Local key management and local signing",
+              "EVM and TRON multi-chain support",
+              "Safe multisig create/sign/execute flows",
+              "Custom RPC endpoint and node switching"
+            ],
+            "sameAs": [
+              "https://github.com/CPcashLabs/WalletRPC"
+            ],
+            "keywords": "隐私钱包,去中心化RPC钱包,零遥测钱包,SAFE多签钱包,EVM钱包,TRON钱包"
+          }
+        ]
+      }
+    </script>
 
     <style>
       :root {
@@ -49,10 +116,27 @@
         position: absolute; top: 0; left: 0; width: 40px; height: 100%;
         background: var(--brand-blue); animation: scanner 1.5s linear infinite;
       }
+      .seo-crawl-content {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+        white-space: nowrap;
+      }
     </style>
 
   </head>
   <body>
+    <main class="seo-crawl-content" aria-label="SEO static content">
+      <h1>以隐私为默认的去中心化 RPC 钱包</h1>
+      <p>Wallet RPC 提供零遥测、无后台、密钥本地签名的自托管体验，支持 EVM 与 TRON 多链。</p>
+      <p>支持 SAFE 多签创建、签名、执行流程，支持自定义 RPC 与节点自由切换。</p>
+      <p>核心关键词：privacy-first、zero-telemetry、no-backend、self-custody、Safe multisig、custom RPC。</p>
+    </main>
     <div id="root">
       <div class="splash-screen">
         <div class="logo-box">
@@ -61,7 +145,7 @@
           </svg>
         </div>
         <div class="status-container">
-          <div class="status-text">INITIALIZING_SECURE_RPC</div>
+          <div class="status-text">INITIALIZING_PRIVATE_RPC</div>
           <div class="progress-track"><div class="progress-bar"></div></div>
         </div>
       </div>

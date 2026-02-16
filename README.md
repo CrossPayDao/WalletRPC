@@ -6,6 +6,10 @@ WalletRPC is a multi-chain wallet UI that talks directly to blockchain nodes ove
 
 Status: **Beta**.
 
+Official website: [wallet-rpc.cp.cash](https://wallet-rpc.cp.cash)
+
+SEO focus keywords: privacy-first wallet, decentralized RPC wallet, zero-telemetry wallet, no-backend wallet, self-custody wallet, Safe multisig wallet, EVM/TRON wallet.
+
 ## Why This Exists
 
 Most “wallet” products gradually become platforms: accounts, servers, analytics, user databases, and opaque background calls. WalletRPC takes the opposite stance:

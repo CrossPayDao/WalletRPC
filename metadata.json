@@ -1,6 +1,18 @@
 {
   "name": "CPcash Wallet RPC",
-  "description": "High-performance Multisig & EOA Wallet for EVM and TRON",
+  "description": "Privacy-first decentralized RPC wallet with zero telemetry, no backend, local signing, Safe multisig support, and custom RPC switching for EVM/TRON.",
+  "keywords": [
+    "privacy wallet",
+    "decentralized rpc wallet",
+    "zero telemetry wallet",
+    "no backend wallet",
+    "self-custody wallet",
+    "safe multisig wallet",
+    "evm wallet",
+    "tron wallet",
+    "custom rpc wallet"
+  ],
+  "website": "https://wallet-rpc.cp.cash",
   "requestFramePermissions": [
     "camera"
   ]

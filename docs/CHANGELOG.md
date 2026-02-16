@@ -3,6 +3,17 @@
 本文件记录面向产品与用户的关键变更，用于统一认知与验收范围。
 注意：本项目坚持 **RPC-only、后台 0 依赖、零遥测**。任何变更不得突破该原则。
 
+## 0.2.0（Beta）
+
+### 新增
+- SEO 基线门禁：新增 `npm run check:seo` 与 CI 工作流 `seo-gate`，强制校验 `robots/sitemap/canonical/OG/Twitter/JSON-LD`、域名一致性与敏感路径禁索引规则。
+- 多语言 SEO 落地页：新增 `/zh/` 与 `/en/` 静态入口页，提供独立 `title/description/canonical/hreflang`，用于搜索引擎语言匹配。
+
+### 变更
+- 官网域名统一：站点 canonical、Open Graph URL、sitemap 与 README 官网信息统一为 `https://wallet-rpc.cp.cash/`。
+- 首页关键词策略升级：围绕“隐私优先、零遥测、无后台、自托管、SAFE 多签、EVM/TRON、自定义 RPC、节点切换”进行中英文关键词优化。
+- 多语言索引策略升级：`sitemap.xml` 升级为含 `xhtml:link hreflang` 的多语言格式，确保 `/`、`/zh/`、`/en/` 互相关联。
+
 ## 0.1.0（Beta）
 
 ### 新增
