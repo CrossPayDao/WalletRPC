@@ -145,4 +145,30 @@ describe('useWalletStorage', () => {
     getSpy.mockRestore();
     setSpy.mockRestore();
   });
+
+  it('current key 损坏时会回退 legacy 并迁移 customTokens', async () => {
+    const tokenData = { [DEFAULT_CHAINS[0].id]: [{ symbol: 'USDT', address: '0x1', decimals: 6 }] };
+    localStorage.setItem('walletrpc_custom_tokens', '{bad json');
+    localStorage.setItem('zerostate_custom_tokens', JSON.stringify(tokenData));
+
+    const { result } = renderHook(() => useWalletStorage());
+
+    await waitFor(() => {
+      expect(result.current.customTokens[DEFAULT_CHAINS[0].id]?.[0]?.symbol).toBe('USDT');
+    });
+    expect(localStorage.getItem('walletrpc_custom_tokens')).toContain('USDT');
+    expect(localStorage.getItem('zerostate_custom_tokens')).toBeNull();
+  });
+
+  it('current key 为空字符串时会走 fallback 且不污染状态', async () => {
+    localStorage.setItem('walletrpc_tracked_safes', '');
+    localStorage.setItem('walletrpc_custom_chains', '');
+
+    const { result } = renderHook(() => useWalletStorage());
+
+    await waitFor(() => {
+      expect(result.current.trackedSafes).toEqual([]);
+      expect(result.current.chains.length).toBeGreaterThan(0);
+    });
+  });
 });

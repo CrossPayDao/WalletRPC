@@ -475,4 +475,52 @@ describe('useEvmWallet handleSwitchNetwork', () => {
     });
   });
 
+  it('非核心视图下不应触发 fetchData 事件刷新', () => {
+    const { dataMock } = setupMocks('EOA', {
+      wallet: { address: '0x000000000000000000000000000000000000beef' },
+      view: 'settings'
+    });
+    renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+    expect(dataMock.fetchData).not.toHaveBeenCalled();
+  });
+
+  it('activeChainId 不存在时应回退到 chains[0]', () => {
+    setupMocks('EOA', {
+      wallet: { address: '0x000000000000000000000000000000000000beef' },
+      activeChainId: 999999
+    });
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+    expect(result.current.activeChain.id).toBe(chainA.id);
+  });
+
+  it('无钱包时 activeAddress 应为空且 introPreflight 保持 false', () => {
+    setupMocks('EOA', { wallet: null, view: 'intro_animation' });
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+    expect(result.current.activeAddress).toBeNull();
+    expect(result.current.isIntroPreflightDone).toBe(false);
+  });
+
+  it('confirmAddToken 在空地址时应直接返回且不报错', async () => {
+    const { stateMock } = setupMocks('EOA', {
+      wallet: { address: '0x000000000000000000000000000000000000beef' }
+    });
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+
+    await act(async () => {
+      await result.current.confirmAddToken('');
+    });
+    expect(stateMock.setError).not.toHaveBeenCalled();
+  });
+
+  it('非 TRON 且 rpc 缺失时 provider 应为 null', () => {
+    const { storageMock, stateMock } = setupMocks('EOA', {
+      wallet: { address: '0x000000000000000000000000000000000000beef' }
+    });
+    storageMock.chains = [{ ...chainA, defaultRpcUrl: '' }];
+    stateMock.activeChainId = chainA.id;
+
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+    expect(result.current.provider).toBeNull();
+  });
+
 });

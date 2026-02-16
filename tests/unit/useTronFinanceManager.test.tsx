@@ -494,4 +494,246 @@ describe('useTronFinanceManager', () => {
     });
     expect(retried).toBe(false);
   });
+
+  it('非 TRON 链下执行写操作应被 ensureWritable 拦截', async () => {
+    const nonTron = { ...tronChain, chainType: 'EVM' as const };
+    const { result, setError } = buildHook({ activeChain: nonTron });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.claimReward();
+    });
+
+    expect(ok).toBe(false);
+    expect(setError).toHaveBeenCalledWith('TRON chain is not active');
+  });
+
+  it('claimReward 在确认超时时应失败并给出超时提示', async () => {
+    vi.useFakeTimers();
+    vi.mocked(TronService.claimReward).mockResolvedValue({ success: true, txid: 'tx-timeout' });
+    vi.mocked(TronService.getTransactionInfo).mockResolvedValue({ found: false });
+    const { result, setError } = buildHook();
+
+    let ok = true;
+    await act(async () => {
+      const p = result.current.claimReward();
+      await vi.advanceTimersByTimeAsync(95_000);
+      ok = await p;
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.action.phase).toBe('failed');
+    expect(setError).toHaveBeenCalledWith(
+      '链上确认超时：交易可能仍在打包中，请稍后刷新或在交易记录中核对状态。'
+    );
+    vi.useRealTimers();
+  });
+
+  it('stakeResource 成功但无 txid 时应直接完成（不进入确认轮询）', async () => {
+    vi.mocked(TronService.stakeResource).mockResolvedValue({ success: true });
+    const getInfoSpy = vi.spyOn(TronService, 'getTransactionInfo');
+    const { result, refreshWalletData } = buildHook();
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.stakeResource(1_000_000n, 'ENERGY');
+    });
+
+    expect(ok).toBe(true);
+    expect(getInfoSpy).not.toHaveBeenCalled();
+    expect(refreshWalletData).toHaveBeenCalledWith(true);
+  });
+
+  it('TRON 链缺失 rpcHost 时 ensureWritable 应拦截写操作', async () => {
+    const noHostChain: ChainConfig = { ...tronChain, defaultRpcUrl: '' };
+    const { result, setError } = buildHook({
+      activeChain: noHostChain,
+      tronPrivateKey: '0x' + '11'.repeat(32)
+    });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.claimReward();
+    });
+
+    expect(ok).toBe(false);
+    expect(setError).toHaveBeenCalledWith('TRON chain is not active');
+  });
+
+  it('voteWitnesses 在 skipPowerGuard=true 时应跳过票权拦截', async () => {
+    vi.mocked(TronService.getAccountResources).mockResolvedValue({
+      energyLimit: 1000,
+      energyUsed: 100,
+      freeNetLimit: 1500,
+      freeNetUsed: 200,
+      netLimit: 500,
+      netUsed: 50,
+      tronPowerLimit: 0,
+      tronPowerUsed: 0
+    });
+    const { result } = buildHook();
+
+    await waitFor(() => {
+      expect(result.current.witnesses.length).toBeGreaterThan(0);
+    });
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.voteWitnesses([{ address: witnessA.address, votes: 1 }], { skipPowerGuard: true });
+    });
+    expect(ok).toBe(true);
+  });
+
+  it('runOneClick 执行期间抛出异常时应进入 failed 并写入错误', async () => {
+    vi.mocked(TronService.getRewardInfo).mockResolvedValue({
+      claimableSun: 0n,
+      canClaim: false
+    });
+    vi.mocked(TronService.stakeResource).mockResolvedValue({ success: true, txid: 'tx-stake' });
+    vi.mocked(TronService.getAccountResources)
+      .mockResolvedValueOnce({
+        energyLimit: 1000,
+        energyUsed: 100,
+        freeNetLimit: 1500,
+        freeNetUsed: 200,
+        netLimit: 500,
+        netUsed: 50,
+        tronPowerLimit: 12,
+        tronPowerUsed: 2
+      })
+      .mockRejectedValue(new Error('resource-fault'));
+    const { result, setError } = buildHook();
+
+    await waitFor(() => {
+      expect(result.current.votes.length).toBeGreaterThan(0);
+    });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.runOneClick({
+        resource: 'ENERGY',
+        stakeAmountSun: 1_000_000n,
+        votes: []
+      });
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.oneClickProgress.stage).toBe('failed');
+    expect(result.current.oneClickProgress.message).toContain('执行异常');
+    expect(setError).toHaveBeenCalledWith('resource-fault');
+  });
+
+  it('refreshFinanceData 在 witness 为空且 vote 接口失败时应使用当前 witnessRef 并报错', async () => {
+    vi.mocked(TronService.getNodeWitnesses).mockResolvedValue([]);
+    vi.mocked(TronService.getVoteStatus).mockRejectedValue(new Error('vote-fault'));
+    const { result, setError } = buildHook();
+
+    await act(async () => {
+      await result.current.refreshFinanceData();
+    });
+
+    expect(result.current.witnesses.length).toBeGreaterThan(0);
+    expect(setError).toHaveBeenCalledWith('TRON finance data refresh failed, please retry.');
+  });
+
+  it('stakeResource 返回失败且无 error 字段时应回退 Operation failed', async () => {
+    vi.mocked(TronService.stakeResource).mockResolvedValue({ success: false });
+    const { result, setError } = buildHook();
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.stakeResource(1_000_000n, 'ENERGY');
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.action.error).toBe('Operation failed');
+    expect(setError).toHaveBeenCalledWith('Operation failed');
+  });
+
+  it('unstakeResource/withdrawUnfreeze 在 in-flight 时应被 guardActionInFlight 拦截', async () => {
+    const deferred = (() => {
+      let resolve: (value: { success: boolean; txid: string }) => void = () => {};
+      const promise = new Promise<{ success: boolean; txid: string }>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    })();
+    vi.mocked(TronService.claimReward).mockImplementation(() => deferred.promise);
+    const { result, setError } = buildHook();
+
+    let claimPromise: Promise<boolean> | null = null;
+    act(() => {
+      claimPromise = result.current.claimReward();
+    });
+    await waitFor(() => {
+      expect(result.current.action.phase).toBe('signing');
+    });
+
+    let u = true;
+    let w = true;
+    await act(async () => {
+      u = await result.current.unstakeResource(1_000_000n, 'ENERGY');
+      w = await result.current.withdrawUnfreeze();
+    });
+    expect(u).toBe(false);
+    expect(w).toBe(false);
+    expect(setError).toHaveBeenCalledWith('A TRON action is still processing. Please wait for confirmation.');
+
+    deferred.resolve({ success: true, txid: 'tx-claim-guard' });
+    await act(async () => {
+      await (claimPromise as Promise<boolean>);
+    });
+  });
+
+  it('voteWitnesses 在非 TRON 链时应被 ensureWritable 拦截', async () => {
+    const nonTron = { ...tronChain, chainType: 'EVM' as const };
+    const { result, setError } = buildHook({ activeChain: nonTron });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.voteWitnesses([{ address: witnessA.address, votes: 1 }]);
+    });
+
+    expect(ok).toBe(false);
+    expect(setError).toHaveBeenCalledWith('TRON chain is not active');
+  });
+
+  it('retryFailedStep 在 claim 失败快照下可重试', async () => {
+    vi.mocked(TronService.claimReward)
+      .mockResolvedValueOnce({ success: false, error: 'claim-fail' })
+      .mockResolvedValueOnce({ success: true, txid: 'tx-claim-retry' });
+    const { result } = buildHook();
+
+    await waitFor(() => {
+      expect(result.current.resources).not.toBeNull();
+    });
+
+    await act(async () => {
+      await result.current.claimReward();
+    });
+    expect(result.current.failedSnapshot?.step).toBe('CLAIM_REWARD');
+    await act(async () => {
+      await result.current.retryFailedStep();
+    });
+    expect(TronService.claimReward).toHaveBeenCalledTimes(2);
+  });
+
+  it('retryFailedStep 在 stake 失败快照下可重试', async () => {
+    vi.mocked(TronService.stakeResource)
+      .mockResolvedValueOnce({ success: false, error: 'stake-fail' })
+      .mockResolvedValueOnce({ success: true, txid: 'tx-stake-retry-2' });
+
+    const { result } = buildHook();
+
+    await act(async () => {
+      await result.current.stakeResource(1_000_000n, 'ENERGY');
+    });
+    expect(result.current.failedSnapshot?.step).toBe('STAKE_RESOURCE');
+    await act(async () => {
+      await result.current.retryFailedStep();
+    });
+
+    expect(TronService.stakeResource).toHaveBeenCalledTimes(2);
+  });
+
 });

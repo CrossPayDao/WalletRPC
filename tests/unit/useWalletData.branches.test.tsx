@@ -182,4 +182,171 @@ describe('useWalletData branches', () => {
 
     expect(provider.getBalance).toHaveBeenCalledTimes(0);
   });
+
+  it('EVM 且 provider 缺失时 fetchData 应直接返回', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useWalletData({
+          wallet: { address: '0x000000000000000000000000000000000000beef' } as any,
+          activeAddress: '0x000000000000000000000000000000000000beef',
+          activeChain: evmChain,
+          activeAccountType: 'EOA',
+          activeChainTokens: [],
+          provider: null,
+          setIsLoading,
+          setError
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      await result.current.fetchData(true);
+    });
+    expect(setIsLoading).not.toHaveBeenCalledWith(true);
+    expect(setError).not.toHaveBeenCalled();
+  });
+
+  it('TRON 缺失 host 时进入 error，并设置同步错误', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const tronNoHost: ChainConfig = { ...tronChain, defaultRpcUrl: '' };
+
+    const { result } = renderHook(
+      () =>
+        useWalletData({
+          wallet: { address: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE' } as any,
+          activeAddress: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
+          activeChain: tronNoHost,
+          activeAccountType: 'EOA',
+          activeChainTokens: [tronToken],
+          provider: null,
+          setIsLoading,
+          setError
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      await result.current.fetchData(true);
+    });
+
+    expect(result.current.sync.phase).toBe('error');
+    expect(setError).toHaveBeenCalled();
+  });
+
+  it('有缓存时后续同步失败应保持 balanceKnown/tokenBalancesKnown 为 true', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const provider = {
+      getBalance: vi.fn(async () => 1_000_000_000_000_000_000n)
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWalletData({
+          wallet: { address: '0x000000000000000000000000000000000000beef' } as any,
+          activeAddress: '0x000000000000000000000000000000000000beef',
+          activeChain: evmChain,
+          activeAccountType: 'EOA',
+          activeChainTokens: [],
+          provider,
+          setIsLoading,
+          setError
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      await result.current.fetchData(true);
+    });
+    expect(result.current.sync.phase).toBe('idle');
+
+    provider.getBalance.mockRejectedValueOnce(new Error('rpc down'));
+    await act(async () => {
+      await result.current.fetchData(true);
+    });
+
+    expect(result.current.sync.phase).toBe('error');
+    expect(result.current.sync.balanceKnown).toBe(true);
+    expect(result.current.sync.tokenBalancesKnown).toBe(true);
+  });
+
+  it('首次同步失败且无缓存时 known 标记应保持 false', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const provider = {
+      getBalance: vi.fn(async () => {
+        throw new Error('first-load-failed');
+      })
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWalletData({
+          wallet: { address: '0x000000000000000000000000000000000000beef' } as any,
+          activeAddress: '0x000000000000000000000000000000000000beef',
+          activeChain: evmChain,
+          activeAccountType: 'EOA',
+          activeChainTokens: [],
+          provider,
+          setIsLoading,
+          setError
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      await result.current.fetchData(true);
+    });
+    expect(result.current.sync.phase).toBe('error');
+    expect(result.current.sync.balanceKnown).toBe(false);
+    expect(result.current.sync.tokenBalancesKnown).toBe(false);
+    expect(setError).toHaveBeenCalled();
+  });
+
+  it('钱包登出时应清空缓存态并重置同步状态', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const provider = {
+      getBalance: vi.fn(async () => 1_000_000_000_000_000_000n)
+    } as any;
+
+    const baseProps = {
+      wallet: { address: '0x000000000000000000000000000000000000beef' } as any,
+      activeAddress: '0x000000000000000000000000000000000000beef',
+      activeChain: evmChain,
+      activeAccountType: 'EOA' as const,
+      activeChainTokens: [] as TokenConfig[],
+      provider,
+      setIsLoading,
+      setError
+    };
+
+    const { result, rerender } = renderHook((p: typeof baseProps) => useWalletData(p), {
+      initialProps: baseProps,
+      wrapper: LanguageProvider
+    });
+
+    await waitFor(() => {
+      expect(result.current.sync.phase).toBe('idle');
+      expect(result.current.sync.balanceKnown).toBe(true);
+    });
+
+    rerender({
+      ...baseProps,
+      wallet: null,
+      activeAddress: null
+    });
+
+    await waitFor(() => {
+      expect(result.current.balance).toBe('0.00');
+      expect(result.current.tokenBalances).toEqual({});
+      expect(result.current.safeDetails).toBeNull();
+      expect(result.current.sync.phase).toBe('idle');
+      expect(result.current.sync.balanceKnown).toBe(false);
+      expect(result.current.sync.tokenBalancesKnown).toBe(false);
+    });
+  });
 });
