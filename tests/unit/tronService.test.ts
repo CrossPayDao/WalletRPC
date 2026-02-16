@@ -403,4 +403,141 @@ describe('TronService', () => {
     const out = await TronService.probeRpc('https://nile.trongrid.io');
     expect(out).toEqual({ ok: false, error: 'Unexpected response' });
   });
+
+  it('getTRC20Balance 在无 constant_result 时返回 0n', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ constant_result: [] })
+    } as Response);
+
+    const out = await TronService.getTRC20Balance('https://nile.trongrid.io', HEX_TRON_ADDR, HEX_TRON_ADDR);
+    expect(out).toBe(0n);
+  });
+
+  it('stakeResource 在 tx.result.result=false 时返回解析后的错误', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: { result: false }, code: '0x4261642052657175657374' })
+    } as Response);
+    const out = await TronService.stakeResource('https://nile.trongrid.io', TEST_PRIVATE_KEY, 100n, 'ENERGY');
+    expect(out.success).toBe(false);
+    expect(String(out.error)).toMatch(/Bad Request|0x4261/i);
+  });
+
+  it('unstakeResource / withdrawUnfreeze 在 owner 无效时直接失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue('');
+    const u1 = await TronService.unstakeResource('https://nile.trongrid.io', TEST_PRIVATE_KEY, 10n, 'BANDWIDTH');
+    const u2 = await TronService.withdrawUnfreeze('https://nile.trongrid.io', TEST_PRIVATE_KEY);
+    expect(u1).toEqual({ success: false, error: 'Invalid owner address' });
+    expect(u2).toEqual({ success: false, error: 'Invalid owner address' });
+  });
+
+  it('unstakeResource / withdrawUnfreeze 在节点 result=false 时返回失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: { result: false }, message: 'QmFkIG9w' })
+    } as Response);
+
+    const u1 = await TronService.unstakeResource('https://nile.trongrid.io', TEST_PRIVATE_KEY, 10n, 'ENERGY');
+    const u2 = await TronService.withdrawUnfreeze('https://nile.trongrid.io', TEST_PRIVATE_KEY);
+    expect(u1.success).toBe(false);
+    expect(u2.success).toBe(false);
+  });
+
+  it('voteWitnesses 在 owner 无效时直接失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue('');
+    const out = await TronService.voteWitnesses('https://nile.trongrid.io', TEST_PRIVATE_KEY, [
+      { address: 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', votes: 1 }
+    ]);
+    expect(out).toEqual({ success: false, error: 'Invalid owner address' });
+  });
+
+  it('voteWitnesses 节点返回 result=false 时透传错误', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    vi.spyOn(TronService, 'isValidBase58Address').mockReturnValue(true);
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: { result: false }, Error: 'Vote denied' })
+    } as Response);
+    const out = await TronService.voteWitnesses('https://nile.trongrid.io', TEST_PRIVATE_KEY, [
+      { address: 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', votes: 1 }
+    ]);
+    expect(out.success).toBe(false);
+    expect(String(out.error)).toMatch(/Vote denied/i);
+  });
+
+  it('claimReward 在 owner 无效时直接失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue('');
+    const out = await TronService.claimReward('https://nile.trongrid.io', TEST_PRIVATE_KEY);
+    expect(out).toEqual({ success: false, error: 'Invalid owner address' });
+  });
+
+  it('sendTransaction 在 host 为空和地址非法时返回失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue('');
+    const noHost = await TronService.sendTransaction('', TEST_PRIVATE_KEY, HEX_TRON_ADDR, 1n);
+    const badAddr = await TronService.sendTransaction('https://nile.trongrid.io', TEST_PRIVATE_KEY, HEX_TRON_ADDR, 1n);
+    expect(noHost).toEqual({ success: false, error: 'Missing TRON RPC base URL' });
+    expect(badAddr).toEqual({ success: false, error: 'Invalid address' });
+  });
+
+  it('sendTransaction 对非法合约地址应失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    const out = await TronService.sendTransaction(
+      'https://nile.trongrid.io',
+      TEST_PRIVATE_KEY,
+      HEX_TRON_ADDR,
+      1n,
+      'invalid-contract'
+    );
+    expect(out.success).toBe(false);
+    expect(String(out.error)).toMatch(/Invalid contract address/i);
+  });
+
+  it('sendTransaction 当 transaction.Error 存在时返回失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ txID: 'c'.repeat(64), Error: 'tx build failed' })
+    } as Response);
+    const out = await TronService.sendTransaction('https://nile.trongrid.io', TEST_PRIVATE_KEY, HEX_TRON_ADDR, 1n);
+    expect(out.success).toBe(false);
+    expect(String(out.error)).toMatch(/tx build failed/i);
+  });
+
+  it('sendTransaction 广播失败时应解析 message/code 错误', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ txID: 'd'.repeat(64) })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: false, message: 'VHJhbnNhY3Rpb24gcmVqZWN0ZWQ=' })
+      } as Response);
+
+    const out = await TronService.sendTransaction('https://nile.trongrid.io', TEST_PRIVATE_KEY, HEX_TRON_ADDR, 1n);
+    expect(out.success).toBe(false);
+    expect(String(out.error)).toMatch(/Transaction rejected|VHJh/i);
+  });
+
+  it('probeRpc host 为空时直接报 Missing TRON RPC base URL', async () => {
+    const out = await TronService.probeRpc('  ');
+    expect(out).toEqual({ ok: false, error: 'Missing TRON RPC base URL' });
+  });
+
+  it('toHexAddress 输入 0x 地址时应直接透传', () => {
+    expect(TronService.toHexAddress(HEX_TRON_ADDR)).toBe(HEX_TRON_ADDR);
+  });
 });
