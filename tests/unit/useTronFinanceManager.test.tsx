@@ -267,4 +267,119 @@ describe('useTronFinanceManager', () => {
     expect(result.current.oneClickProgress.steps[2]?.status).toBe('failed');
     expect(setError).toHaveBeenCalledWith('No previous voted SR found. One-click re-vote requires historical voted witnesses.');
   });
+
+  it('voteWitnesses 在无可用票权时会被拦截', async () => {
+    vi.mocked(TronService.getAccountResources).mockResolvedValue({
+      energyLimit: 1000,
+      energyUsed: 100,
+      freeNetLimit: 1500,
+      freeNetUsed: 200,
+      netLimit: 500,
+      netUsed: 50,
+      tronPowerLimit: 2,
+      tronPowerUsed: 2
+    });
+    const { result, setError } = buildHook();
+
+    await waitFor(() => {
+      expect(result.current.resources?.tronPowerLimit).toBe(2);
+    });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.voteWitnesses([{ address: witnessA.address, votes: 1 }]);
+    });
+
+    expect(ok).toBe(false);
+    expect(setError).toHaveBeenCalledWith('Insufficient Tron Power. Stake TRX first, then vote.');
+  });
+
+  it('voteWitnesses 票数全为无效值时会拦截', async () => {
+    const { result, setError } = buildHook();
+    await waitFor(() => {
+      expect(result.current.witnesses.length).toBeGreaterThan(0);
+    });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.voteWitnesses([{ address: witnessA.address, votes: 0 }]);
+    });
+
+    expect(ok).toBe(false);
+    expect(setError).toHaveBeenCalledWith('Vote count must be greater than 0');
+  });
+
+  it('claimReward 链上执行失败时进入 failed 状态', async () => {
+    vi.mocked(TronService.getTransactionInfo).mockResolvedValue({ found: true, success: false });
+    const { result, setError } = buildHook();
+
+    await waitFor(() => {
+      expect(result.current.resources).not.toBeNull();
+    });
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.claimReward();
+    });
+
+    expect(ok).toBe(false);
+    expect(result.current.action.phase).toBe('failed');
+    expect(result.current.action.step).toBe('CLAIM_REWARD');
+    expect(setError).toHaveBeenCalledWith('Transaction execution failed on-chain');
+  });
+
+  it('stakeResource 失败后 retryFailedStep 会按快照重试', async () => {
+    vi.mocked(TronService.stakeResource)
+      .mockResolvedValueOnce({ success: false, error: 'stake fail' })
+      .mockResolvedValueOnce({ success: true, txid: 'tx-stake-retry' });
+
+    const { result } = buildHook();
+    await waitFor(() => {
+      expect(result.current.resources).not.toBeNull();
+    });
+
+    let first = true;
+    await act(async () => {
+      first = await result.current.stakeResource(1_000_000n, 'ENERGY');
+    });
+    expect(first).toBe(false);
+    expect(result.current.failedSnapshot?.step).toBe('STAKE_RESOURCE');
+
+    let retried = false;
+    await act(async () => {
+      retried = await result.current.retryFailedStep();
+    });
+    expect(retried).toBe(true);
+    expect(TronService.stakeResource).toHaveBeenCalledTimes(2);
+  });
+
+  it('refreshFinanceData 并发触发时第二次调用应被锁跳过', async () => {
+    const deferred = (() => {
+      let resolve: (v: any) => void = () => {};
+      const promise = new Promise((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    })();
+    vi.mocked(TronService.getAccountResources).mockImplementation(() => deferred.promise as any);
+    const { result } = buildHook();
+
+    await act(async () => {
+      const p1 = result.current.refreshFinanceData();
+      const p2 = result.current.refreshFinanceData();
+      deferred.resolve({
+        energyLimit: 1000,
+        energyUsed: 100,
+        freeNetLimit: 1500,
+        freeNetUsed: 200,
+        netLimit: 500,
+        netUsed: 50,
+        tronPowerLimit: 12,
+        tronPowerUsed: 2
+      });
+      await Promise.all([p1, p2]);
+    });
+
+    expect(TronService.getAccountResources).toHaveBeenCalledTimes(1);
+  });
 });
