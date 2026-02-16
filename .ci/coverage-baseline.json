@@ -3,12 +3,12 @@
     "lines": 53.42,
     "statements": 49.89,
     "functions": 53.01,
-    "branches": 42.13
+    "branches": 85.00
   },
   "previous": {
-    "lines": 53.42,
-    "statements": 49.89,
-    "functions": 53.01,
-    "branches": 42.13
+    "lines": 94.41,
+    "statements": 92.14,
+    "functions": 91.26,
+    "branches": 85.02
   }
 }
