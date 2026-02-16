@@ -36,7 +36,13 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ fadeOut = false })
     containerRef.current.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      if (containerRef.current?.contains(canvas)) {
+        containerRef.current.removeChild(canvas);
+      }
+      canvasRef.current = null;
+      return;
+    }
 
     const depth = 1800;
     const focal = 620;
@@ -116,9 +122,10 @@ export const ParticleIntro: React.FC<ParticleIntroProps> = ({ fadeOut = false })
     return () => {
       window.removeEventListener('resize', handleResize);
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (containerRef.current && canvasRef.current) {
+      if (containerRef.current && canvasRef.current && containerRef.current.contains(canvasRef.current)) {
         containerRef.current.removeChild(canvasRef.current);
       }
+      canvasRef.current = null;
     };
   }, []);
 

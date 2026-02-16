@@ -42,6 +42,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
   const [newThresholdSelect, setNewThresholdSelect] = useState(safeDetails.threshold);
   const [optimisticOps, setOptimisticOps] = useState<OptimisticOp[]>([]);
   const verifyTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const transientTimeoutsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const verifyRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const refreshInFlightRef = useRef(false);
   const refreshRef = useRef(onRefreshSafeDetails);
@@ -75,6 +76,15 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     const inFlightSteps: ProcessStep[] = ['building', 'syncing', 'verifying', 'timeout'];
     return optimisticOps.some((op) => inFlightSteps.includes(op.step));
   }, [optimisticOps]);
+
+  const scheduleTransientTimeout = (fn: () => void, ms: number) => {
+    const timer = setTimeout(() => {
+      transientTimeoutsRef.current.delete(timer);
+      fn();
+    }, ms);
+    transientTimeoutsRef.current.add(timer);
+    return timer;
+  };
 
   // 在 verifying/timeout（扫描/超时）阶段主动拉取 Safe 元数据，避免“没有任何请求但一直扫描”的假象
   useEffect(() => {
@@ -215,6 +225,8 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
     return () => {
       for (const timer of verifyTimeoutsRef.current.values()) clearTimeout(timer);
       verifyTimeoutsRef.current.clear();
+      for (const timer of transientTimeoutsRef.current.values()) clearTimeout(timer);
+      transientTimeoutsRef.current.clear();
       if (verifyRefreshIntervalRef.current) clearInterval(verifyRefreshIntervalRef.current);
       verifyRefreshIntervalRef.current = null;
     };
@@ -235,7 +247,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
         return op;
       });
       if (changed) {
-        setTimeout(() => setOptimisticOps(current => current.filter(o => o.step !== 'vanishing')), 500);
+        scheduleTransientTimeout(() => setOptimisticOps(current => current.filter(o => o.step !== 'vanishing')), 500);
         return next;
       }
       return prev;
@@ -279,7 +291,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       const result = await onAddOwner(target, safeDetails.threshold);
       if (result) {
         if (safeDetails.threshold === 1) updateOpStatus(target, 'add', { step: 'verifying' });
-        else { updateOpStatus(target, 'add', { step: 'success' }); setTimeout(() => clearOp(target, 'add'), 3000); }
+        else { updateOpStatus(target, 'add', { step: 'success' }); scheduleTransientTimeout(() => { void clearOp(target, 'add'); }, 3000); }
       } else {
         updateOpStatus(target, 'add', { step: 'error', error: t('safe.op_proposal_failed') });
       }
@@ -301,7 +313,7 @@ export const SafeSettings: React.FC<SafeSettingsProps> = ({
       const result = await onRemoveOwner(owner, nextThreshold);
       if (result) {
         if (safeDetails.threshold === 1) updateOpStatus(target, 'remove', { step: 'verifying' });
-        else { updateOpStatus(target, 'remove', { step: 'success' }); setTimeout(() => clearOp(target, 'remove'), 2000); }
+        else { updateOpStatus(target, 'remove', { step: 'success' }); scheduleTransientTimeout(() => { void clearOp(target, 'remove'); }, 2000); }
       } else {
         updateOpStatus(target, 'remove', { step: 'error', error: t('safe.op_proposal_failed') });
       }

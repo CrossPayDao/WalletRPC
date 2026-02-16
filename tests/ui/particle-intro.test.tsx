@@ -85,7 +85,7 @@ describe('ParticleIntro', () => {
       </LanguageProvider>
     );
 
-    expect(container.querySelector('canvas')).toBeInTheDocument();
+    expect(container.querySelector('canvas')).not.toBeInTheDocument();
     expect(addSpy).not.toHaveBeenCalledWith('resize', expect.any(Function));
     expect(rafSpy).not.toHaveBeenCalled();
 
