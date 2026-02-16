@@ -217,6 +217,89 @@ describe('TronService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('getAccountResources 会映射资源字段并返回 number', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        EnergyLimit: 1000,
+        EnergyUsed: 100,
+        freeNetLimit: 2000,
+        freeNetUsed: 300,
+        NetLimit: 500,
+        NetUsed: 50,
+        tronPowerLimit: 10,
+        tronPowerUsed: 4
+      })
+    } as Response);
+
+    const out = await TronService.getAccountResources('https://nile.trongrid.io', HEX_TRON_ADDR);
+    expect(out).toEqual({
+      energyLimit: 1000,
+      energyUsed: 100,
+      freeNetLimit: 2000,
+      freeNetUsed: 300,
+      netLimit: 500,
+      netUsed: 50,
+      tronPowerLimit: 10,
+      tronPowerUsed: 4
+    });
+  });
+
+  it('getCanWithdrawUnfreeze 在异常时返回 0n', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({})
+    } as Response);
+    const out = await TronService.getCanWithdrawUnfreeze('https://nile.trongrid.io', HEX_TRON_ADDR);
+    expect(out).toBe(0n);
+  });
+
+  it('getVoteStatus 在响应不可解析时返回空数组（容错）', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        votes: [{ vote_address: 'bad_hex', vote_count: 7 }]
+      })
+    } as Response);
+
+    const out = await TronService.getVoteStatus('https://nile.trongrid.io', HEX_TRON_ADDR);
+    expect(out).toEqual([]);
+  });
+
+  it('getRewardInfo 能解析奖励并计算 canClaim', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ reward: 1200 })
+    } as Response);
+
+    const out = await TronService.getRewardInfo('https://nile.trongrid.io', HEX_TRON_ADDR);
+    expect(out).toEqual({ claimableSun: 1200n, canClaim: true });
+  });
+
+  it('claimReward 在节点返回 result=false 时返回失败', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: { result: false }, code: 'DENIED' })
+    } as Response);
+
+    const out = await TronService.claimReward('https://nile.trongrid.io', TEST_PRIVATE_KEY);
+    expect(out.success).toBe(false);
+  });
+
+  it('voteWitnesses 对无效票列表直接拦截', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    const out = await TronService.voteWitnesses('https://nile.trongrid.io', TEST_PRIVATE_KEY, [
+      { address: 'bad-address', votes: 0 }
+    ]);
+    expect(out).toEqual({ success: false, error: 'Vote count must be greater than 0' });
+  });
+
   it('getBalance 在 HTTP 非 2xx 时应抛错（由上层决定是否保留旧值或展示错误）', async () => {
     vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
       ok: false,

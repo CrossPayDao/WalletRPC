@@ -263,4 +263,100 @@ describe('useTransactionManager', () => {
     expect(getTransactionCount).not.toHaveBeenCalled();
     expect(result.current.localNonceRef.current).toBe(12);
   });
+
+  it('handleSendSubmit 在 EVM 缺少 wallet/provider 时返回失败并设置错误', async () => {
+    const setError = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet: null,
+          tronPrivateKey: null,
+          provider: null,
+          activeChain: evmChain,
+          activeChainId: 199,
+          activeAccountType: 'EOA',
+          fetchData: vi.fn(),
+          setError,
+          handleSafeProposal: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    let out: any;
+    await act(async () => {
+      out = await result.current.handleSendSubmit({
+        recipient: '0x0000000000000000000000000000000000000001',
+        amount: '1',
+        asset: 'NATIVE'
+      });
+    });
+    expect(out.success).toBe(false);
+    expect(setError).toHaveBeenCalled();
+  });
+
+  it('handleSendSubmit 在 TRON 缺少私钥时返回失败并设置错误', async () => {
+    const setError = vi.fn();
+    const tronChain = { ...evmChain, chainType: 'TRON' as const, currencySymbol: 'TRX', defaultRpcUrl: 'https://nile.trongrid.io' };
+    const wallet = { address: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE' } as any;
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet,
+          tronPrivateKey: null,
+          provider: null,
+          activeChain: tronChain,
+          activeChainId: tronChain.id,
+          activeAccountType: 'EOA',
+          fetchData: vi.fn(),
+          setError,
+          handleSafeProposal: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    let out: any;
+    await act(async () => {
+      out = await result.current.handleSendSubmit({
+        recipient: 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE',
+        amount: '1',
+        asset: 'NATIVE'
+      });
+    });
+    expect(out.success).toBe(false);
+    expect(setError).toHaveBeenCalled();
+  });
+
+  it('SAFE 模式在缺少 handleSafeProposal 时返回失败', async () => {
+    const setError = vi.fn();
+    const provider = { getTransactionCount: vi.fn(async () => 0) } as any;
+    const wallet = { address: '0x0000000000000000000000000000000000000001' } as any;
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet,
+          tronPrivateKey: null,
+          provider,
+          activeChain: evmChain,
+          activeChainId: evmChain.id,
+          activeAccountType: 'SAFE',
+          fetchData: vi.fn(),
+          setError,
+          handleSafeProposal: undefined
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    let out: any;
+    await act(async () => {
+      out = await result.current.handleSendSubmit({
+        recipient: '0x0000000000000000000000000000000000000002',
+        amount: '1',
+        asset: 'NATIVE'
+      });
+    });
+    expect(out.success).toBe(false);
+    expect(setError).toHaveBeenCalled();
+  });
 });
