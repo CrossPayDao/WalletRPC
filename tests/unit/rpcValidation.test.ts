@@ -39,4 +39,39 @@ describe('rpcValidation', () => {
       }
     }
   });
+
+  it('probeEvmChainId 在 HTTP 非 2xx 时抛错', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({})
+    } as Response);
+
+    await expect(probeEvmChainId('https://rpc.local')).rejects.toThrow(/HTTP 503/);
+  });
+
+  it('probeEvmChainId 在返回格式非法时抛错', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ result: 1 })
+    } as Response);
+
+    await expect(probeEvmChainId('https://rpc.local')).rejects.toThrow(/Invalid RPC response/);
+  });
+
+  it('validateEvmRpcEndpoint 会拒绝非 http(s) scheme', async () => {
+    const result = await validateEvmRpcEndpoint('ws://rpc.local', 1);
+    expect(result).toEqual({ ok: false, code: 'rpc_url_invalid_scheme' });
+  });
+
+  it('validateEvmRpcEndpoint 在探测失败时返回 rpc_validation_failed', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockRejectedValue(new Error('network down'));
+    const result = await validateEvmRpcEndpoint('https://rpc.local', 1);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('rpc_validation_failed');
+      expect(result.detail).toMatch(/network down/);
+    }
+  });
 });
