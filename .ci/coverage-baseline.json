@@ -1,0 +1,14 @@
+{
+  "minimum": {
+    "lines": 53.42,
+    "statements": 49.89,
+    "functions": 53.01,
+    "branches": 42.13
+  },
+  "previous": {
+    "lines": 53.42,
+    "statements": 49.89,
+    "functions": 53.01,
+    "branches": 42.13
+  }
+}

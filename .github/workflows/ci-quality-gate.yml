@@ -37,6 +37,9 @@ jobs:
       - name: Unit and UI tests
         run: npm run test
 
+      - name: Coverage gate (no regression)
+        run: npm run test:coverage:gate
+
       - name: Build
         run: npm run build
 
