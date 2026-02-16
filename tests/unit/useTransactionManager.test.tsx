@@ -302,6 +302,65 @@ describe('useTransactionManager', () => {
     vi.useRealTimers();
   });
 
+  it('syncNonce 在 TRON 链或缺少 wallet/provider 时应直接跳过', async () => {
+    const tronChain = { ...evmChain, chainType: 'TRON' as const, defaultRpcUrl: 'https://nile.trongrid.io' };
+    const getTransactionCount = vi.fn(async () => 1);
+    const provider = { getTransactionCount } as any;
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet: null,
+          tronPrivateKey: null,
+          provider: null,
+          activeChain: tronChain,
+          activeChainId: tronChain.id,
+          activeAccountType: 'EOA',
+          fetchData: vi.fn(),
+          setError: vi.fn(),
+          handleSafeProposal: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+    await act(async () => {
+      await result.current.syncNonce();
+    });
+    expect(getTransactionCount).not.toHaveBeenCalled();
+  });
+
+  it('syncNonce: 重试全部失败时应保持 localNonceRef 为空', async () => {
+    vi.useFakeTimers();
+    const getTransactionCount = vi.fn().mockRejectedValue(new Error('rpc down'));
+    const provider = { getTransactionCount } as any;
+    const wallet = { address: '0x0000000000000000000000000000000000000001' } as any;
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet,
+          tronPrivateKey: null,
+          provider,
+          activeChain: evmChain,
+          activeChainId: 199,
+          activeAccountType: 'EOA',
+          fetchData: vi.fn(),
+          setError: vi.fn(),
+          handleSafeProposal: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      const p = result.current.syncNonce();
+      await vi.advanceTimersByTimeAsync(800);
+      await p;
+    });
+
+    expect(getTransactionCount).toHaveBeenCalledTimes(3);
+    expect(result.current.localNonceRef.current).toBeNull();
+    vi.useRealTimers();
+  });
+
   it('handleSendSubmit 在 EVM 缺少 wallet/provider 时返回失败并设置错误', async () => {
     const setError = vi.fn();
     const { result } = renderHook(
@@ -396,6 +455,41 @@ describe('useTransactionManager', () => {
     });
     expect(out.success).toBe(false);
     expect(setError).toHaveBeenCalled();
+  });
+
+  it('SAFE 模式发送原生币时 handleSafeProposal 返回 true 则整体成功', async () => {
+    const setError = vi.fn();
+    const provider = { getTransactionCount: vi.fn(async () => 0) } as any;
+    const wallet = { address: '0x0000000000000000000000000000000000000001' } as any;
+    const handleSafeProposal = vi.fn(async () => true);
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet,
+          tronPrivateKey: null,
+          provider,
+          activeChain: evmChain,
+          activeChainId: evmChain.id,
+          activeAccountType: 'SAFE',
+          fetchData: vi.fn(),
+          setError,
+          handleSafeProposal
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    let out: any;
+    await act(async () => {
+      out = await result.current.handleSendSubmit({
+        recipient: '0x0000000000000000000000000000000000000002',
+        amount: '1',
+        asset: 'NATIVE'
+      });
+    });
+    expect(out).toEqual({ success: true });
+    expect(handleSafeProposal).toHaveBeenCalled();
+    expect(setError).not.toHaveBeenCalled();
   });
 
   it('EVM EOA 成功发送后会记录交易并递增本地 nonce', async () => {

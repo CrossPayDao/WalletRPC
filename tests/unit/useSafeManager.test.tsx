@@ -314,4 +314,81 @@ describe('useSafeManager', () => {
     expect(params.setActiveAccountType).not.toHaveBeenCalledWith('SAFE');
   });
 
+  it('addOwnerTx/removeOwnerTx/changeThresholdTx 在 threshold=1 时可走成功提议路径', async () => {
+    const params = baseParams();
+    const encodeSpy = vi.fn(() => '0xencoded');
+    const safeWrite = {
+      execTransaction: vi.fn(async () => ({ hash: '0x' + 'a'.repeat(64) }))
+    };
+    const proposalSafeContract = {
+      nonce: vi.fn(async () => 1n),
+      getOwners: vi.fn(async () => [params.wallet!.address, '0x0000000000000000000000000000000000000002']),
+      getThreshold: vi.fn(async () => 1n),
+      getTransactionHash: vi.fn(async () => '0x' + 'ab'.repeat(32)),
+      connect: vi.fn().mockReturnValue(safeWrite),
+      interface: { encodeFunctionData: encodeSpy }
+    };
+
+    mocked.contractCtor
+      .mockImplementationOnce(function () {
+        return { interface: { encodeFunctionData: encodeSpy } } as any;
+      })
+      .mockImplementationOnce(function () {
+        return proposalSafeContract as any;
+      })
+      .mockImplementationOnce(function () {
+        return {
+        getOwners: vi.fn(async () => [params.wallet!.address, '0x0000000000000000000000000000000000000002']),
+        interface: { encodeFunctionData: encodeSpy }
+      } as any;
+      })
+      .mockImplementationOnce(function () {
+        return proposalSafeContract as any;
+      })
+      .mockImplementationOnce(function () {
+        return { interface: { encodeFunctionData: encodeSpy } } as any;
+      })
+      .mockImplementationOnce(function () {
+        return proposalSafeContract as any;
+      });
+
+    vi.spyOn(FeeService, 'getOptimizedFeeData').mockResolvedValue({} as any);
+    vi.spyOn(FeeService, 'buildOverrides').mockReturnValue({} as any);
+
+    const { result } = renderHook(() => useSafeManager(params), { wrapper: LanguageProvider });
+
+    await expect(result.current.addOwnerTx('0x0000000000000000000000000000000000000003', 1)).resolves.toBe(true);
+    await expect(result.current.removeOwnerTx(params.wallet!.address, 1)).resolves.toBe(true);
+    await expect(result.current.changeThresholdTx(1)).resolves.toBe(true);
+    expect(safeWrite.execTransaction).toHaveBeenCalledTimes(3);
+  });
+
+  it('handleSafeProposal 当签名 v>=30 时不应再次调整 v', async () => {
+    mocked.signatureFrom.mockReturnValue({
+      r: '0x' + '33'.repeat(32),
+      s: '0x' + '44'.repeat(32),
+      v: 31
+    } as any);
+    const params = baseParams();
+    const execTransaction = vi.fn(async () => ({ hash: '0xhash-v31' }));
+    const safeContract = {
+      nonce: vi.fn(async () => 1n),
+      getOwners: vi.fn(async () => [params.wallet!.address]),
+      getThreshold: vi.fn(async () => 1n),
+      getTransactionHash: vi.fn(async () => '0x' + 'ab'.repeat(32)),
+      connect: vi.fn().mockReturnValue({ execTransaction })
+    };
+    mocked.contractCtor.mockImplementation(function () {
+      return safeContract as any;
+    });
+    vi.spyOn(FeeService, 'getOptimizedFeeData').mockResolvedValue({} as any);
+    vi.spyOn(FeeService, 'buildOverrides').mockReturnValue({} as any);
+
+    const { result } = renderHook(() => useSafeManager(params), { wrapper: LanguageProvider });
+    await expect(
+      result.current.handleSafeProposal('0x0000000000000000000000000000000000000001', 0n, '0x', 'sig-v31')
+    ).resolves.toBe(true);
+    expect(execTransaction).toHaveBeenCalled();
+  });
+
 });
