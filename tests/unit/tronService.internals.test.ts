@@ -37,6 +37,17 @@ describe('TronService internals', () => {
     expect(__TRON_TEST__.parseApiError({ code: 'ERR_X' })).toBe('ERR_X');
   });
 
+  it('decode 对不可打印字符与 atob 缺失场景保持健壮', () => {
+    expect(__TRON_TEST__.tryDecodeHexAscii('00010203')).toBeNull();
+
+    const oldAtob = (globalThis as any).atob;
+    // 走 Buffer 分支
+    (globalThis as any).atob = undefined;
+    const b64 = Buffer.from('fallback-via-buffer').toString('base64');
+    expect(__TRON_TEST__.tryDecodeBase64Ascii(b64)).toBe('fallback-via-buffer');
+    (globalThis as any).atob = oldAtob;
+  });
+
   it('toTxPayload 处理 transaction/raw/非法输入', () => {
     expect(__TRON_TEST__.toTxPayload({ transaction: { txID: 'abc' } })).toEqual({ txID: 'abc' });
     expect(__TRON_TEST__.toTxPayload({ txID: 'abc', raw_data: {} })).toEqual({ txID: 'abc', raw_data: {} });
@@ -135,6 +146,25 @@ describe('TronService internals', () => {
     ).rejects.toThrow('raw-error');
   });
 
+  it('getBalance 缺失 balance 字段时回退 0，getTRC20Balance 的 Error 会原样抛出', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({})
+    } as any);
+    await expect(TronService.getBalance('https://nile.trongrid.io', 'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE')).resolves.toBe(0n);
+
+    fetchMock.mockRejectedValueOnce(new Error('hard-fail'));
+    await expect(
+      TronService.getTRC20Balance(
+        'https://nile.trongrid.io',
+        'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf',
+        'TQn9Y2khEsLJW1ChVWFMSMeRDow5KcbLSE'
+      )
+    ).rejects.toThrow('hard-fail');
+  });
+
   it('getRewardInfo reward=0 时 canClaim=false，probeRpc 非 Error 失败时返回字符串', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
     fetchMock.mockResolvedValueOnce({
@@ -185,6 +215,27 @@ describe('TronService internals', () => {
     fetchMock.mockRejectedValueOnce(new Error('rpc down'));
     const out = await TronService.getNodeWitnesses('https://api.trongrid.io');
     expect(out.length).toBe(1);
+  });
+
+  it('getNodeWitnesses 在 listWitnesses 回退包含脏数据时应容错返回', async () => {
+    vi.spyOn(TronService, 'isValidBase58Address').mockReturnValue(true);
+    const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock
+      .mockResolvedValueOnce({ ok: false, status: 500, json: async () => ({}) } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          witnesses: [
+            { address: 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', url: 123 },
+            { address: '41' + '11'.repeat(20), url: 456 },
+            { address: '', url: '' }
+          ]
+        })
+      } as any);
+
+    const out = await TronService.getNodeWitnesses('https://nile.trongrid.io');
+    expect(Array.isArray(out)).toBe(true);
   });
 
   it('getAccountResources / getCanWithdrawUnfreeze 缺字段时回退默认值', async () => {
@@ -264,6 +315,21 @@ describe('TronService internals', () => {
     expect(c.error).toContain('fail');
   });
 
+  it('stake/claim/vote 在异常对象无 message 时走默认错误文案', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    vi.spyOn(TronService, 'isValidBase58Address').mockReturnValue(true);
+    vi.spyOn(globalThis, 'fetch' as any).mockRejectedValue({});
+
+    const a = await TronService.stakeResource('https://nile.trongrid.io', PRIVATE_KEY, 1n, 'ENERGY');
+    const b = await TronService.claimReward('https://nile.trongrid.io', PRIVATE_KEY);
+    const c = await TronService.voteWitnesses('https://nile.trongrid.io', PRIVATE_KEY, [
+      { address: 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn', votes: 1 }
+    ]);
+    expect(a.error).toContain('stake failed');
+    expect(b.error).toContain('claim reward failed');
+    expect(String(c.error)).toContain('All endpoint attempts failed');
+  });
+
   it('claimReward 在 owner 地址无效时应直接失败', async () => {
     vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue('');
     await expect(TronService.claimReward('https://nile.trongrid.io', PRIVATE_KEY)).resolves.toEqual({
@@ -284,5 +350,55 @@ describe('TronService internals', () => {
     const second = await TronService.getTransactionInfo('https://nile.trongrid.io', '0xbbb');
     expect(first).toEqual({ found: false });
     expect(second).toEqual({ found: true });
+  });
+
+  it('getTransactionInfo fallback contractRet 非 SUCCESS 时返回失败', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ id: 'x' }) } as any)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ ret: [{ contractRet: 'OUT_OF_ENERGY' }] }) } as any);
+
+    await expect(TronService.getTransactionInfo('https://nile.trongrid.io', '0xccc')).resolves.toEqual({
+      found: true,
+      success: false
+    });
+  });
+
+  it('sendTransaction TRC20 成功构建后广播失败会回退 code 错误', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(HEX_TRON_ADDR);
+    const fetchMock = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: { result: true }, transaction: { txID: 'c'.repeat(64), raw_data: {} } })
+      } as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: false, code: 'BROADCAST_ERR' })
+      } as any);
+
+    const out = await TronService.sendTransaction(
+      'https://nile.trongrid.io',
+      PRIVATE_KEY,
+      HEX_TRON_ADDR,
+      1n,
+      HEX_TRON_ADDR
+    );
+    expect(out.success).toBe(false);
+    expect(String(out.error)).toContain('BROADCAST_ERR');
+  });
+
+  it('probeRpc 在返回结构非区块时给出 Unexpected response', async () => {
+    vi.spyOn(globalThis, 'fetch' as any).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ not: 'block' })
+    } as any);
+    await expect(TronService.probeRpc('https://nile.trongrid.io')).resolves.toEqual({
+      ok: false,
+      error: 'Unexpected response'
+    });
   });
 });
