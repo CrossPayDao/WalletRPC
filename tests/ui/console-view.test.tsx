@@ -124,4 +124,62 @@ describe('ConsoleView', () => {
     await user.click(screen.getByRole('button', { name: /SAFE nonce/i }));
     expect(screen.getByText('9')).toBeInTheDocument();
   });
+
+  it('page 模式支持返回按钮，且详情对异常数据与兜底展示稳定', async () => {
+    const user = userEvent.setup();
+    const onBack = vi.fn();
+    const circular: any = { a: 1 };
+    circular.self = circular;
+
+    mockUseHttpConsole().mockReturnValue({
+      enabled: true,
+      setEnabled: vi.fn(),
+      expanded: true,
+      setExpanded: vi.fn(),
+      open: vi.fn(),
+      events: [
+        {
+          id: 'bad-1',
+          ts: Date.now(),
+          category: 'rpc',
+          method: 'POST',
+          url: 'https://rpc.bad',
+          host: '',
+          status: undefined,
+          durationMs: undefined,
+          action: '',
+          requestBody: circular,
+          responseBody: null
+        },
+        {
+          id: 'bad-2',
+          ts: Date.now(),
+          category: 'rpc',
+          method: 'POST',
+          url: 'https://rpc.bad/2',
+          host: undefined,
+          status: 200,
+          durationMs: 1890,
+          action: 'ok-action',
+          requestBody: { params: [{ data: '0x12' }] },
+          responseBody: { result: 123 }
+        }
+      ] as any,
+      clear: vi.fn()
+    });
+
+    render(
+      <LanguageProvider>
+        <ConsoleView mode="page" onBack={onBack} />
+      </LanguageProvider>
+    );
+
+    await user.click(screen.getByLabelText('console-back'));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText(/unknown/i).length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole('button', { name: /ok-action/i }));
+    expect(screen.getAllByText('1.89s').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+  });
 });

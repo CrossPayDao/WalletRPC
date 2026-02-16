@@ -319,4 +319,153 @@ const chain: ChainConfig = {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('save exploded');
   });
+
+  it('ChainModal 自定义 RPC 为空时阻止保存并提示必填', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+
+    wrap(
+      <ChainModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialConfig={chain}
+        chains={[chain]}
+        onSwitchNetwork={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1], 'custom');
+    const rpcInput = screen.getByPlaceholderText('https://...');
+    await user.clear(rpcInput);
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/required/i);
+  });
+
+  it('ChainModal 在 EVM 探活返回 invalid scheme 码时展示对应错误', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    vi.spyOn(rpcValidation, 'validateEvmRpcEndpoint').mockResolvedValue({
+      ok: false,
+      code: 'rpc_url_invalid_scheme'
+    } as any);
+
+    wrap(
+      <ChainModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialConfig={chain}
+        chains={[chain]}
+        onSwitchNetwork={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1], 'custom');
+    const rpcInput = screen.getByPlaceholderText('https://...');
+    await user.clear(rpcInput);
+    await user.type(rpcInput, 'https://rpc.changed.local');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/http\(s\):\/\//i);
+  });
+
+  it('ChainModal EVM 探活返回未知错误码时使用 detail 兜底文案', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    vi.spyOn(rpcValidation, 'validateEvmRpcEndpoint').mockResolvedValue({
+      ok: false,
+      code: 'rpc_probe_failed',
+      detail: 'connection refused'
+    } as any);
+
+    wrap(
+      <ChainModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialConfig={chain}
+        chains={[chain]}
+        onSwitchNetwork={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1], 'custom');
+    const rpcInput = screen.getByPlaceholderText('https://...');
+    await user.clear(rpcInput);
+    await user.type(rpcInput, 'https://rpc.changed.local');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/connection refused/i);
+  });
+
+  it('ChainModal 保存抛出非 Error 值时也能展示错误', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(rpcValidation, 'validateEvmRpcEndpoint').mockResolvedValue({ ok: true } as any);
+    const onSave = vi.fn(async () => {
+      throw 'plain failure';
+    });
+
+    wrap(
+      <ChainModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialConfig={chain}
+        chains={[chain]}
+        onSwitchNetwork={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1], 'custom');
+    const rpcInput = screen.getByPlaceholderText('https://...');
+    await user.clear(rpcInput);
+    await user.type(rpcInput, 'https://rpc.changed.local');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('plain failure');
+  });
+
+  it('ChainModal 无 explorer 数据时显示空态文案', () => {
+    const noExplorerChain: ChainConfig = { ...chain, explorers: [] };
+    wrap(
+      <ChainModal
+        isOpen={true}
+        onClose={vi.fn()}
+        initialConfig={noExplorerChain}
+        chains={[noExplorerChain]}
+        onSwitchNetwork={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/no explorers/i)).toBeInTheDocument();
+  });
+
+  it('ChainModal 无 onOpenConsole 时点击按钮仍应关闭弹窗', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+
+    wrap(
+      <ChainModal
+        isOpen={true}
+        onClose={onClose}
+        initialConfig={chain}
+        chains={[chain]}
+        onSwitchNetwork={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByLabelText('open-console'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });
