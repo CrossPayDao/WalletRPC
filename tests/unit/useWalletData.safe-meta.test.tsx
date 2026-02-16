@@ -275,6 +275,52 @@ describe('useWalletData safe meta refresh', () => {
     expect(result.current.safeDetails).toBeNull();
   });
 
+  it('refreshSafeDetails 在已有 safeDetails 且 fields 全 false 时不应触发任何子字段请求', async () => {
+    const provider = {
+      getCode: vi.fn(async () => '0x1234'),
+      getBalance: vi.fn(async () => 0n)
+    } as any;
+
+    const getOwners = vi.fn(async () => ['0x' + '2'.repeat(40)]);
+    const getThreshold = vi.fn(async () => 2n);
+    const getNonce = vi.fn(async () => 1n);
+    mocked.contractCtor.mockImplementation(() => ({
+      getOwners,
+      getThreshold,
+      nonce: getNonce
+    }));
+
+    const { result } = renderHook(
+      () =>
+        useWalletData({
+          wallet: { address: '0x' + '1'.repeat(40) } as any,
+          activeAddress: '0x' + '1'.repeat(40),
+          activeChain: evmChain,
+          activeAccountType: 'SAFE',
+          activeChainTokens: [] as TokenConfig[],
+          provider,
+          setIsLoading: vi.fn(),
+          setError: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      await result.current.refreshSafeDetails(true);
+    });
+    getOwners.mockClear();
+    getThreshold.mockClear();
+    getNonce.mockClear();
+
+    await act(async () => {
+      await result.current.refreshSafeDetails(true, { owners: false, threshold: false, nonce: false });
+    });
+
+    expect(getOwners).not.toHaveBeenCalled();
+    expect(getThreshold).not.toHaveBeenCalled();
+    expect(getNonce).not.toHaveBeenCalled();
+  });
+
   it('refreshSafeDetails in-flight 时第二次调用应被跳过', async () => {
     let resolveCode: (v: string) => void = () => {};
     const provider = {

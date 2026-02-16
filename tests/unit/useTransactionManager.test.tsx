@@ -1053,4 +1053,101 @@ describe('useTransactionManager', () => {
     const msg = String(setError.mock.calls.at(-1)?.[0] || '');
     expect(msg.length).toBeLessThan(200);
   });
+
+  it('TRON 广播失败细节为空时应使用基础错误文案', async () => {
+    const tronChain = {
+      ...evmChain,
+      chainType: 'TRON' as const,
+      currencySymbol: 'TRX',
+      defaultRpcUrl: 'https://nile.trongrid.io'
+    };
+    const wallet = { address: 'TPYmHEhy5n8TCEfYGqW2rPxsghSfzghPDn' } as any;
+    const setError = vi.fn();
+    vi.spyOn(TronService, 'sendTransaction').mockResolvedValue({
+      success: false,
+      error: '   '
+    });
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet,
+          tronPrivateKey: '0x' + '1'.repeat(64),
+          provider: null,
+          activeChain: tronChain,
+          activeChainId: tronChain.id,
+          activeAccountType: 'EOA',
+          fetchData: vi.fn(),
+          setError,
+          handleSafeProposal: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await act(async () => {
+      await result.current.handleSendSubmit({
+        recipient: wallet.address,
+        amount: '1',
+        asset: 'NATIVE'
+      });
+    });
+
+    const msg = String(setError.mock.calls.at(-1)?.[0] || '');
+    expect(msg).toBeTruthy();
+    expect(msg.includes(':')).toBe(false);
+  });
+
+  it('轮询达到更高尝试次数后应进入 30s 退避', async () => {
+    vi.useFakeTimers();
+    const getTransactionReceipt = vi.fn(async () => null);
+    const provider = { getTransactionReceipt } as any;
+
+    const { result } = renderHook(
+      () =>
+        useTransactionManager({
+          wallet: null,
+          tronPrivateKey: null,
+          provider,
+          activeChain: evmChain,
+          activeChainId: evmChain.id,
+          activeAccountType: 'EOA',
+          fetchData: vi.fn(),
+          setError: vi.fn(),
+          handleSafeProposal: vi.fn()
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    act(() => {
+      result.current.addTransactionRecord({
+        id: 'tx-backoff-30s',
+        chainId: evmChain.id,
+        hash: '0x' + 'd'.repeat(64),
+        status: 'submitted',
+        timestamp: Date.now(),
+        summary: 'backoff-30s'
+      });
+    });
+
+    for (let i = 0; i < 18; i++) {
+      await act(async () => {
+        vi.advanceTimersByTime(15000);
+        await Promise.resolve();
+      });
+    }
+    const calls = getTransactionReceipt.mock.calls.length;
+
+    await act(async () => {
+      vi.advanceTimersByTime(15000);
+      await Promise.resolve();
+    });
+    expect(getTransactionReceipt.mock.calls.length).toBe(calls);
+
+    await act(async () => {
+      vi.advanceTimersByTime(15000);
+      await Promise.resolve();
+    });
+    expect(getTransactionReceipt.mock.calls.length).toBe(calls + 1);
+    vi.useRealTimers();
+  });
 });
