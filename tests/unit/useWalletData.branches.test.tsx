@@ -23,6 +23,17 @@ const tronToken: TokenConfig = {
   decimals: 6
 };
 
+const evmChain: ChainConfig = {
+  id: 199,
+  name: 'BitTorrent Chain',
+  defaultRpcUrl: 'https://rpc.bittorrentchain.io',
+  publicRpcUrls: ['https://rpc.bittorrentchain.io'],
+  currencySymbol: 'BTT',
+  chainType: 'EVM',
+  explorers: [],
+  tokens: []
+};
+
 describe('useWalletData branches', () => {
   it('TRON token 查询失败时保留上一次已知余额，避免误置 0', async () => {
     const setError = vi.fn();
@@ -96,5 +107,79 @@ describe('useWalletData branches', () => {
     });
 
     expect(setError).toHaveBeenCalled();
+  });
+
+  it('同一 scopeKey 下自动刷新只触发一次，地址变化后会再次自动刷新', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const provider = {
+      getBalance: vi.fn(async () => 1_000_000_000_000_000_000n)
+    } as any;
+
+    const props = {
+      wallet: { address: '0x000000000000000000000000000000000000beef' } as any,
+      activeAddress: '0x000000000000000000000000000000000000beef',
+      activeChain: evmChain,
+      activeAccountType: 'EOA' as const,
+      activeChainTokens: [] as TokenConfig[],
+      provider,
+      setIsLoading,
+      setError
+    };
+
+    const { rerender } = renderHook((p: typeof props) => useWalletData(p), {
+      initialProps: props,
+      wrapper: LanguageProvider
+    });
+
+    await waitFor(() => {
+      expect(provider.getBalance).toHaveBeenCalledTimes(1);
+    });
+
+    rerender({ ...props });
+    expect(provider.getBalance).toHaveBeenCalledTimes(1);
+
+    rerender({
+      ...props,
+      activeAddress: '0x000000000000000000000000000000000000c0de'
+    });
+    await waitFor(() => {
+      expect(provider.getBalance).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('fetchData 非强制模式在冷却时间内不会重复请求', async () => {
+    const setError = vi.fn();
+    const setIsLoading = vi.fn();
+    const provider = {
+      getBalance: vi.fn(async () => 1_000_000_000_000_000n)
+    } as any;
+
+    const { result } = renderHook(
+      () =>
+        useWalletData({
+          wallet: { address: '0x000000000000000000000000000000000000beef' } as any,
+          activeAddress: '0x000000000000000000000000000000000000beef',
+          activeChain: evmChain,
+          activeAccountType: 'EOA',
+          activeChainTokens: [],
+          provider,
+          setIsLoading,
+          setError
+        }),
+      { wrapper: LanguageProvider }
+    );
+
+    await waitFor(() => {
+      expect(provider.getBalance).toHaveBeenCalledTimes(1);
+    });
+
+    provider.getBalance.mockClear();
+    await act(async () => {
+      await result.current.fetchData(false);
+      await result.current.fetchData(false);
+    });
+
+    expect(provider.getBalance).toHaveBeenCalledTimes(0);
   });
 });
