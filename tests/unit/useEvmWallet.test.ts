@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ChainConfig } from '../../features/wallet/types';
 import { useEvmWallet } from '../../features/wallet/hooks/useEvmWallet';
@@ -8,6 +8,7 @@ import { useWalletData } from '../../features/wallet/hooks/useWalletData';
 import { useTransactionManager } from '../../features/wallet/hooks/useTransactionManager';
 import { useSafeManager } from '../../features/wallet/hooks/useSafeManager';
 import { LanguageProvider } from '../../contexts/LanguageContext';
+import { TronService } from '../../services/tronService';
 
 vi.mock('../../features/wallet/hooks/useWalletStorage', () => ({ useWalletStorage: vi.fn() }));
 vi.mock('../../features/wallet/hooks/useWalletState', () => ({ useWalletState: vi.fn() }));
@@ -45,6 +46,9 @@ interface SetupOverrides {
   unstableFetchData?: boolean;
   customTokens?: Record<number, any[]>;
   chainType?: 'EVM' | 'TRON';
+  activeChainId?: number;
+  view?: string;
+  tronWalletAddress?: string | null;
 }
 
 const setupMocks = (activeAccountType: 'EOA' | 'SAFE', overrides: SetupOverrides = {}) => {
@@ -60,14 +64,14 @@ const setupMocks = (activeAccountType: 'EOA' | 'SAFE', overrides: SetupOverrides
   const stateMock = {
     wallet: overrides.wallet ?? null,
     tronPrivateKey: null,
-    tronWalletAddress: null,
+    tronWalletAddress: overrides.tronWalletAddress ?? null,
     activeAccountType,
     setActiveAccountType: vi.fn(),
     activeSafeAddress: overrides.activeSafeAddress ?? '0x000000000000000000000000000000000000dEaD',
     setActiveSafeAddress: vi.fn(),
-    activeChainId: 199,
+    activeChainId: overrides.activeChainId ?? 199,
     setActiveChainId: vi.fn(),
-    view: 'dashboard',
+    view: overrides.view ?? 'dashboard',
     setView: vi.fn(),
     error: null,
     setError: vi.fn(),
@@ -411,6 +415,64 @@ describe('useEvmWallet handleSwitchNetwork', () => {
     expect(stateMock.setActiveSafeAddress).toHaveBeenCalledWith(safeAddress);
     expect(stateMock.setActiveAccountType).toHaveBeenCalledWith('SAFE');
     expect(stateMock.setView).toHaveBeenCalledWith('dashboard');
+  });
+
+  it('intro_animation 下自动探测到其他 TRON 链有余额时会切链', async () => {
+    const tronActive: ChainConfig = {
+      id: 728126428,
+      name: 'TRON Nile',
+      defaultRpcUrl: 'https://nile.trongrid.io',
+      publicRpcUrls: ['https://nile.trongrid.io'],
+      currencySymbol: 'TRX',
+      chainType: 'TRON',
+      explorers: [],
+      tokens: []
+    };
+    const tronTarget: ChainConfig = {
+      ...tronActive,
+      id: 3448148188,
+      name: 'TRON Mainnet',
+      defaultRpcUrl: 'https://api.trongrid.io',
+      publicRpcUrls: ['https://api.trongrid.io']
+    };
+    const { stateMock, storageMock } = setupMocks('EOA', {
+      wallet: { address: '0x000000000000000000000000000000000000beef' },
+      tronWalletAddress: 'TKxFAZWkATzrk4vXkSaCKpmiuSDavz...',
+      view: 'intro_animation',
+      activeChainId: tronActive.id
+    });
+    storageMock.chains = [tronActive, tronTarget];
+
+    const normalizeSpy = vi.spyOn(TronService, 'normalizeHost').mockImplementation((v) => v);
+    const getBalanceSpy = vi
+      .spyOn(TronService, 'getBalance')
+      .mockImplementation(async (host: string) => (host.includes('nile') ? 0n : 12n));
+
+    renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+
+    await waitFor(() => {
+      expect(stateMock.setActiveChainId).toHaveBeenCalledWith(tronTarget.id);
+    });
+    expect(normalizeSpy).toHaveBeenCalled();
+    expect(getBalanceSpy).toHaveBeenCalled();
+  });
+
+  it('intro_animation 且首轮同步完成后 isIntroPreflightDone 置为 true', async () => {
+    setupMocks('EOA', {
+      wallet: { address: '0x000000000000000000000000000000000000beef' },
+      tronWalletAddress: 'TKxFAZWkATzrk4vXkSaCKpmiuSDavz...',
+      view: 'intro_animation',
+      chainType: 'TRON'
+    });
+
+    vi.spyOn(TronService, 'normalizeHost').mockImplementation((v) => v);
+    vi.spyOn(TronService, 'getBalance').mockResolvedValue(0n);
+
+    const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+
+    await waitFor(() => {
+      expect(result.current.isIntroPreflightDone).toBe(true);
+    });
   });
 
 });

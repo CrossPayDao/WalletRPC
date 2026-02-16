@@ -93,4 +93,44 @@ describe('ParticleIntro', () => {
     expect(cancelSpy).not.toHaveBeenCalled();
     getContextSpy.mockRestore();
   });
+
+  it('触发 resize 时会重新设置画布尺寸；rafId=0 时卸载不调用 cancelAnimationFrame', () => {
+    const ctx = {
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+      setTransform: vi.fn(),
+      fillStyle: ''
+    } as any;
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(ctx);
+
+    let resizeHandler: ((e: Event) => void) | null = null;
+    const addSpy = vi.spyOn(window, 'addEventListener').mockImplementation((type: any, cb: any) => {
+      if (type === 'resize') resizeHandler = cb;
+    });
+    const removeSpy = vi.spyOn(window, 'removeEventListener').mockImplementation(() => {});
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(0);
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    const { unmount } = render(
+      <LanguageProvider>
+        <ParticleIntro />
+      </LanguageProvider>
+    );
+
+    expect(addSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(ctx.setTransform).toHaveBeenCalledTimes(1);
+    resizeHandler?.(new Event('resize'));
+    expect(ctx.setTransform).toHaveBeenCalledTimes(2);
+
+    unmount();
+    expect(removeSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(rafSpy).toHaveBeenCalled();
+    expect(cancelSpy).not.toHaveBeenCalled();
+    getContextSpy.mockRestore();
+  });
 });
