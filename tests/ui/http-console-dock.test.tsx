@@ -4,6 +4,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LanguageProvider } from '../../contexts/LanguageContext';
 import { HttpConsoleProvider, useHttpConsole } from '../../contexts/HttpConsoleContext';
+import { ethers } from 'ethers';
 
 const Harness: React.FC = () => {
   const c = useHttpConsole();
@@ -193,5 +194,82 @@ describe('HttpConsole dock', () => {
 
     openSpy.mockRestore();
     sendSpy.mockRestore();
+  });
+
+  it('eth_call(getOwners) 应生成 SAFE 语义并可在详情中解析 owners 数量', async () => {
+    const coder = ethers.AbiCoder.defaultAbiCoder();
+    const responseBody = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      result: coder.encode(
+        ['address[]'],
+        [[
+          '0x0000000000000000000000000000000000000001',
+          '0x0000000000000000000000000000000000000002'
+        ]]
+      )
+    });
+    (globalThis as any).fetch = vi.fn(async () => ({
+      status: 200,
+      clone: () => ({ text: async () => responseBody }),
+      text: async () => responseBody
+    }));
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+
+    await user.click(screen.getByText('open'));
+    await act(async () => {
+      await (window.fetch as any)('https://rpc.example', {
+        method: 'POST',
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_call',
+          params: [{ data: '0xa0e67e2b' }, 'latest']
+        })
+      });
+    });
+
+    await user.click(await screen.findByRole('button', { name: /SAFE owners|Safe owners|查询 Safe 成员/i }));
+    expect(await screen.findByText('2')).toBeTruthy();
+  });
+
+  it('eth_sendRawTransaction 应对原始签名参数做脱敏', async () => {
+    const responseBody = JSON.stringify({ jsonrpc: '2.0', id: 1, result: '0x' + 'a'.repeat(64) });
+    (globalThis as any).fetch = vi.fn(async () => ({
+      status: 200,
+      clone: () => ({ text: async () => responseBody }),
+      text: async () => responseBody
+    }));
+    const user = userEvent.setup();
+    render(
+      <LanguageProvider>
+        <HttpConsoleProvider>
+          <Harness />
+        </HttpConsoleProvider>
+      </LanguageProvider>
+    );
+
+    await user.click(screen.getByText('open'));
+    await act(async () => {
+      await (window.fetch as any)('https://rpc.example', {
+        method: 'POST',
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_sendRawTransaction',
+          params: ['0x' + 'ab'.repeat(256)]
+        })
+      });
+    });
+
+    await user.click(await screen.findByRole('button', { name: /Broadcast transaction|广播交易/i }));
+    expect(await screen.findByText(/\[redacted\]/i)).toBeTruthy();
   });
 });
