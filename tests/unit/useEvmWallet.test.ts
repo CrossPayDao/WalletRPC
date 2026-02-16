@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChainConfig } from '../../features/wallet/types';
 import { useEvmWallet } from '../../features/wallet/hooks/useEvmWallet';
 import { useWalletStorage } from '../../features/wallet/hooks/useWalletStorage';
@@ -15,6 +15,17 @@ vi.mock('../../features/wallet/hooks/useWalletState', () => ({ useWalletState: v
 vi.mock('../../features/wallet/hooks/useWalletData', () => ({ useWalletData: vi.fn() }));
 vi.mock('../../features/wallet/hooks/useTransactionManager', () => ({ useTransactionManager: vi.fn() }));
 vi.mock('../../features/wallet/hooks/useSafeManager', () => ({ useSafeManager: vi.fn() }));
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 const chainA: ChainConfig = {
   id: 199,
