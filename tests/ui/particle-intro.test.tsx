@@ -133,4 +133,47 @@ describe('ParticleIntro', () => {
     expect(cancelSpy).not.toHaveBeenCalled();
     getContextSpy.mockRestore();
   });
+
+  it('执行一帧动画时会处理 z<=1 的星点并继续调度下一帧', () => {
+    const ctx = {
+      clearRect: vi.fn(),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      arc: vi.fn(),
+      fill: vi.fn(),
+      setTransform: vi.fn(),
+      fillStyle: ''
+    } as any;
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(ctx);
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    let frameCb: FrameRequestCallback | null = null;
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      frameCb = cb;
+      return rafSpy.mock.calls.length + 100;
+    });
+    const cancelSpy = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
+
+    const { unmount } = render(
+      <LanguageProvider>
+        <ParticleIntro />
+      </LanguageProvider>
+    );
+
+    expect(frameCb).toBeTypeOf('function');
+    frameCb?.(16);
+
+    expect(ctx.clearRect).toHaveBeenCalled();
+    expect(ctx.fillRect).toHaveBeenCalled();
+    // random=0 时星点 z 初始值为 1，减速后全部走重置分支，不会绘制 arc
+    expect(ctx.arc).not.toHaveBeenCalled();
+    expect(rafSpy).toHaveBeenCalledTimes(2);
+
+    unmount();
+    expect(cancelSpy).toHaveBeenCalled();
+    getContextSpy.mockRestore();
+    randomSpy.mockRestore();
+  });
 });
