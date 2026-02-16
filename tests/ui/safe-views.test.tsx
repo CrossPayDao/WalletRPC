@@ -402,4 +402,149 @@ describe('Safe views UI', () => {
       vi.useRealTimers();
     }
   });
+
+  it('SafeSettings 在 threshold>1 新增成功时展示 Proposed 分支并调用 onAddOwner', async () => {
+    vi.useFakeTimers();
+    try {
+      const onAddOwner = vi.fn(async () => true);
+      wrap(
+        <SafeSettings
+          safeDetails={{
+            owners: [
+              '0x1111111111111111111111111111111111111111',
+              '0x2222222222222222222222222222222222222222'
+            ],
+            threshold: 2,
+            nonce: 0
+          }}
+          walletAddress="0x1111111111111111111111111111111111111111"
+          onRemoveOwner={vi.fn(async () => true)}
+          onAddOwner={onAddOwner}
+          onChangeThreshold={vi.fn(async () => true)}
+          onBack={vi.fn()}
+        />
+      );
+
+      fireEvent.change(screen.getByPlaceholderText('0x...'), {
+        target: { value: '0x3333333333333333333333333333333333333333' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'PROPOSE' }));
+      await act(async () => {
+        vi.advanceTimersByTime(650);
+        await Promise.resolve();
+      });
+
+      expect(onAddOwner).toHaveBeenCalledTimes(1);
+      expect(screen.queryByText(/Scanning|扫描/i)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('SafeSettings 非 owner 删除成员时应直接拒绝', async () => {
+    const onRemoveOwner = vi.fn(async () => true);
+    wrap(
+      <SafeSettings
+        safeDetails={{
+          owners: [
+            '0x1111111111111111111111111111111111111111',
+            '0x2222222222222222222222222222222222222222'
+          ],
+          threshold: 1,
+          nonce: 0
+        }}
+        walletAddress="0x3333333333333333333333333333333333333333"
+        onRemoveOwner={onRemoveOwner}
+        onAddOwner={vi.fn(async () => true)}
+        onChangeThreshold={vi.fn(async () => true)}
+        onBack={vi.fn()}
+      />
+    );
+
+    const trashBtns = Array.from(document.querySelectorAll('button')).filter((b) => {
+      const svg = b.querySelector('svg');
+      return !!svg && svg.className.baseVal.includes('lucide-trash2');
+    });
+    expect(trashBtns.length).toBeGreaterThan(0);
+    fireEvent.click(trashBtns[0] as HTMLButtonElement);
+
+    expect(await screen.findByText(/Access Denied|无权限/i)).toBeInTheDocument();
+    expect(onRemoveOwner).not.toHaveBeenCalled();
+  });
+
+  it('SafeSettings 队列中的新增若已在链上则应直接消失而不重复广播', async () => {
+    vi.useFakeTimers();
+    try {
+      const onAddOwner = vi.fn(async () => true);
+      const base = {
+        owners: ['0x1111111111111111111111111111111111111111'],
+        threshold: 1,
+        nonce: 0
+      };
+      const { rerender } = wrap(
+        <SafeSettings
+          safeDetails={base}
+          walletAddress="0x1111111111111111111111111111111111111111"
+          onRemoveOwner={vi.fn(async () => true)}
+          onAddOwner={onAddOwner}
+          onChangeThreshold={vi.fn(async () => true)}
+          onRefreshSafeDetails={vi.fn(async () => {})}
+          onBack={vi.fn()}
+        />
+      );
+
+      fireEvent.change(screen.getByPlaceholderText('0x...'), {
+        target: { value: '0x2222222222222222222222222222222222222222' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'PROPOSE' }));
+      await act(async () => {
+        vi.advanceTimersByTime(650);
+        await Promise.resolve();
+      });
+      expect(onAddOwner).toHaveBeenCalledTimes(1);
+
+      fireEvent.change(screen.getByPlaceholderText('0x...'), {
+        target: { value: '0x3333333333333333333333333333333333333333' }
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'PROPOSE' }));
+      expect(screen.getByText('Queued')).toBeInTheDocument();
+
+      rerender(
+        <LanguageProvider>
+          <SafeSettings
+            safeDetails={{
+              ...base,
+              owners: [
+                ...base.owners,
+                '0x2222222222222222222222222222222222222222',
+                '0x3333333333333333333333333333333333333333'
+              ]
+            }}
+            walletAddress="0x1111111111111111111111111111111111111111"
+            onRemoveOwner={vi.fn(async () => true)}
+            onAddOwner={onAddOwner}
+            onChangeThreshold={vi.fn(async () => true)}
+            onRefreshSafeDetails={vi.fn(async () => {})}
+            onBack={vi.fn()}
+          />
+        </LanguageProvider>
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(550);
+        await Promise.resolve();
+      });
+      expect(onAddOwner).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('CreateSafe 在无 walletAddress 时初始化为空 owner', () => {
+    wrap(<CreateSafe onDeploy={vi.fn()} onCancel={vi.fn()} isDeploying={false} />);
+    expect(screen.getByDisplayValue('')).toBeInTheDocument();
+  });
 });

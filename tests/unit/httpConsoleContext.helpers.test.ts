@@ -17,9 +17,9 @@ describe('HttpConsole helpers', () => {
   it('toTextBody 支持 string/ArrayBuffer/TypedArray/Blob/Request', async () => {
     expect(await __HTTP_CONSOLE_TEST__.toTextBody('/x', { body: 'hello' })).toBe('hello');
 
-    const ab = new TextEncoder().encode('buf').buffer;
-    const abBody = await __HTTP_CONSOLE_TEST__.toTextBody('/x', { body: ab });
-    expect(typeof abBody === 'string' || abBody === null).toBe(true);
+    const ab = new ArrayBuffer(3);
+    new Uint8Array(ab).set([98, 117, 102]); // "buf"
+    expect(await __HTTP_CONSOLE_TEST__.toTextBody('/x', { body: ab })).toBe('buf');
 
     const ta = new Uint8Array(new TextEncoder().encode('typed'));
     expect(await __HTTP_CONSOLE_TEST__.toTextBody('/x', { body: ta })).toBe('typed');
@@ -64,6 +64,10 @@ describe('HttpConsole helpers', () => {
     });
     expect(__HTTP_CONSOLE_TEST__.deriveRpcMeta([{ method: 123 }])).toEqual({ rpcMethod: undefined, isBatch: true });
     expect(__HTTP_CONSOLE_TEST__.deriveRpcMeta({ method: 'eth_call' })).toEqual({ rpcMethod: 'eth_call', isBatch: false });
+    expect(__HTTP_CONSOLE_TEST__.deriveRpcMeta([123, { method: 'eth_getBalance' }])).toEqual({
+      rpcMethod: 'eth_getBalance',
+      isBatch: true
+    });
 
     expect(__HTTP_CONSOLE_TEST__.getSelector('0x12345678abcd')).toBe('0x12345678');
     expect(__HTTP_CONSOLE_TEST__.getSelector('0x12')).toBeNull();
@@ -113,5 +117,6 @@ describe('HttpConsole helpers', () => {
     expect(__HTTP_CONSOLE_TEST__.actionForHttp('GET', '/app.js', t)).toBe('console.intent_load_asset');
     expect(__HTTP_CONSOLE_TEST__.actionForHttp('GET', '/image.PNG', t)).toBe('console.intent_load_asset');
     expect(__HTTP_CONSOLE_TEST__.actionForHttp('POST', '/api', t)).toBe('console.intent_http_request');
+    expect(__HTTP_CONSOLE_TEST__.actionForHttp('', '', t)).toBe('console.intent_load_page');
   });
 });
