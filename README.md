@@ -1,4 +1,4 @@
-# WalletRPC
+# WalletRPC (CPcash)
 
 [![Coverage Gate](https://github.com/CrossPayDao/WalletRPC/actions/workflows/ci-quality-gate.yml/badge.svg?branch=main)](https://github.com/CrossPayDao/WalletRPC/actions/workflows/ci-quality-gate.yml)
 
