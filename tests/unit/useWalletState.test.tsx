@@ -190,4 +190,80 @@ describe('useWalletState', () => {
 
     expect(secondRef).toBe(firstRef);
   });
+
+  it('setError(null) 应清除所有错误状态', () => {
+    const { result } = renderHook(() => useWalletState(1), { wrapper: LanguageProvider });
+
+    act(() => {
+      result.current.setError('TEMP_ERROR');
+    });
+    expect(result.current.error).toBe('TEMP_ERROR');
+
+    act(() => {
+      result.current.setError(null);
+    });
+    expect(result.current.error).toBeNull();
+    expect(result.current.errorObject).toBeNull();
+  });
+
+  it('冷却窗口外的相同错误应视为新错误', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-15T00:00:00.000Z'));
+    const { result } = renderHook(() => useWalletState(1), { wrapper: LanguageProvider });
+
+    act(() => {
+      result.current.setError('SAME_ERROR');
+    });
+    const first = result.current.errorObject!;
+
+    // 超出展示期 + 冷却窗口
+    act(() => {
+      vi.advanceTimersByTime(20000);
+      result.current.setError('SAME_ERROR');
+    });
+    const second = result.current.errorObject!;
+    expect(second.count).toBe(1);
+    expect(second.shownAt).not.toBe(first.shownAt);
+
+    vi.useRealTimers();
+  });
+
+  it('支持 0x 前缀私钥导入', async () => {
+    vi.spyOn(TronService, 'addressFromPrivateKey').mockReturnValue(`T${'4'.repeat(33)}`);
+    const pk = '0x59c6995e998f97a5a0044966f0945382d7f9e9955f5d5f8d6f2ad4d9c7cb4d95';
+    const { result } = renderHook(() => useWalletState(1), { wrapper: LanguageProvider });
+
+    act(() => {
+      result.current.setPrivateKeyOrPhrase(pk);
+    });
+
+    let success = false;
+    await act(async () => {
+      success = await result.current.handleImport();
+    });
+
+    expect(success).toBe(true);
+    expect(result.current.wallet?.address).toBe(new ethers.Wallet(pk).address);
+    expect(result.current.tronPrivateKey).toBe(pk);
+  });
+
+  it('不同错误消息不应触发去重逻辑', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-15T00:00:00.000Z'));
+    const { result } = renderHook(() => useWalletState(1), { wrapper: LanguageProvider });
+
+    act(() => {
+      result.current.setError('ERROR_A');
+    });
+    expect(result.current.errorObject!.count).toBe(1);
+
+    act(() => {
+      vi.advanceTimersByTime(100);
+      result.current.setError('ERROR_B');
+    });
+    expect(result.current.errorObject!.message).toBe('ERROR_B');
+    expect(result.current.errorObject!.count).toBe(1);
+
+    vi.useRealTimers();
+  });
 });

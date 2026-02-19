@@ -84,7 +84,7 @@ describe('useWalletStorage', () => {
   });
 
   it('单个损坏的存储 key 不会阻断其他 key 的恢复', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
     localStorage.setItem('zerostate_custom_chains', '{bad json');
     localStorage.setItem('zerostate_tracked_safes', JSON.stringify([
       {
@@ -169,6 +169,16 @@ describe('useWalletStorage', () => {
     await waitFor(() => {
       expect(result.current.trackedSafes).toEqual([]);
       expect(result.current.chains.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('localStorage 值为 "null" 字符串时应回退默认值', async () => {
+    localStorage.setItem('walletrpc_custom_chains', 'null');
+    const { result } = renderHook(() => useWalletStorage());
+
+    await waitFor(() => {
+      expect(result.current.chains.length).toBeGreaterThan(0);
+      expect(result.current.chains.every(c => c !== null)).toBe(true);
     });
   });
 });
