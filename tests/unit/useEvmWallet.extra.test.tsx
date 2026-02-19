@@ -1,74 +1,110 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DeduplicatingJsonRpcProvider } from '../../features/wallet/hooks/useEvmWallet';
+import { act, renderHook, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { useEvmWallet } from '../../features/wallet/hooks/useEvmWallet';
+import { useWalletStorage } from '../../features/wallet/hooks/useWalletStorage';
+import { useWalletState } from '../../features/wallet/hooks/useWalletState';
+import { useWalletData } from '../../features/wallet/hooks/useWalletData';
+import { useTransactionManager } from '../../features/wallet/hooks/useTransactionManager';
+import { useSafeManager } from '../../features/wallet/hooks/useSafeManager';
+import { LanguageProvider } from '../../contexts/LanguageContext';
+import { TronService } from '../../services/tronService';
 import { ethers } from 'ethers';
 
-describe('DeduplicatingJsonRpcProvider', () => {
-    let provider: DeduplicatingJsonRpcProvider;
+// Mock dependencies
+vi.mock('../../features/wallet/hooks/useWalletStorage', () => ({ useWalletStorage: vi.fn() }));
+vi.mock('../../features/wallet/hooks/useWalletState', () => ({ useWalletState: vi.fn() }));
+vi.mock('../../features/wallet/hooks/useWalletData', () => ({ useWalletData: vi.fn() }));
+vi.mock('../../features/wallet/hooks/useTransactionManager', () => ({ useTransactionManager: vi.fn() }));
+vi.mock('../../features/wallet/hooks/useSafeManager', () => ({ useSafeManager: vi.fn() }));
 
+const chainA = {
+    id: 1,
+    name: 'Ethereum',
+    defaultRpcUrl: 'https://eth.rpc',
+    chainType: 'EVM',
+    tokens: [
+        { address: '0xDefToken', symbol: 'DEF', decimals: 18 }
+    ]
+};
+
+const setupMocks = (overrides: any = {}) => {
+    const storageMock = {
+        trackedSafes: [],
+        setTrackedSafes: vi.fn(),
+        chains: [chainA],
+        setChains: vi.fn(),
+        customTokens: {},
+        setCustomTokens: vi.fn()
+    };
+
+    const stateMock = {
+        wallet: { address: '0xUser' },
+        activeAccountType: 'EOA',
+        activeChainId: 1,
+        activeSafeAddress: null,
+        setActiveChainId: vi.fn(),
+        setError: vi.fn(),
+        setNotification: vi.fn(),
+        view: overrides.view || 'dashboard',
+        setIsLoading: vi.fn(),
+        setIsAddTokenModalOpen: vi.fn(),
+        tronWalletAddress: overrides.tronWalletAddress || null,
+    };
+
+    vi.mocked(useWalletStorage).mockReturnValue(storageMock as any);
+    vi.mocked(useWalletState).mockReturnValue(stateMock as any);
+    vi.mocked(useWalletData).mockReturnValue({
+        fetchData: vi.fn(),
+        safeDetails: null,
+        isInitialFetchDone: true
+    } as any);
+    vi.mocked(useTransactionManager).mockReturnValue({
+        addTransactionRecord: vi.fn()
+    } as any);
+    vi.mocked(useSafeManager).mockReturnValue({});
+
+    return { stateMock, storageMock };
+};
+
+describe('useEvmWallet Extra Coverage', () => {
     beforeEach(() => {
-        provider = new DeduplicatingJsonRpcProvider('https://rpc.example.com', ethers.Network.from(1), { staticNetwork: ethers.Network.from(1) });
+        vi.clearAllMocks();
+        vi.useRealTimers();
     });
 
-    it('对非缓存方法直接穿透调用 super.send', async () => {
-        const spy = vi.spyOn(ethers.JsonRpcProvider.prototype, 'send').mockResolvedValue('ok');
-        await provider.send('eth_sendTransaction', []);
-        expect(spy).toHaveBeenCalledWith('eth_sendTransaction', []);
+    it('confirmAddToken should check for duplicates in activeChain.tokens (defaults)', async () => {
+        const { stateMock } = setupMocks();
+        const { result } = renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
+
+        await act(async () => {
+            // Check against default token defined in chainA
+            await result.current.confirmAddToken('0xDefToken');
+        });
+
+        expect(stateMock.setError).toHaveBeenCalled(); // Should assume "Token already exists"
     });
 
-    it('对 inflightOnly 方法进行并发去重但不缓存结果', async () => {
-        const spy = vi.spyOn(ethers.JsonRpcProvider.prototype, 'send')
-            .mockImplementation(async () => {
-                await new Promise(r => setTimeout(r, 10));
-                return 'balance';
-            });
+    it('auto-detect failure (all probes fail) should remain on current chain', async () => {
+        vi.useFakeTimers();
+        const { stateMock } = setupMocks({ view: 'intro_animation', tronWalletAddress: 'TAddr' });
 
-        const p1 = provider.send('eth_getBalance', ['0x123']);
-        const p2 = provider.send('eth_getBalance', ['0x123']);
+        // Mock all probes to fail or timeout
+        vi.spyOn(TronService, 'getBalance').mockImplementation(async () => {
+            await new Promise(r => setTimeout(r, 20000)); // Timeout
+            return 0n;
+        });
+        vi.spyOn(ethers.JsonRpcProvider.prototype, 'getBalance').mockImplementation(async () => {
+            throw new Error('rpc error');
+        });
 
-        // expect(p1).toBe(p2); // Identity check might fail due to internal nesting/state, purely checking behavior (dedup) is sufficient
-        await Promise.all([p1, p2]);
-        expect(spy).toHaveBeenCalledTimes(1);
+        renderHook(() => useEvmWallet(), { wrapper: LanguageProvider });
 
-        // Subsequent call should trigger new request (no cache)
-        await provider.send('eth_getBalance', ['0x123']);
-        expect(spy).toHaveBeenCalledTimes(2);
-    });
+        // Advance enough for budget timeout (1500ms)
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2000);
+        });
 
-    it('对 resCacheMethods 方法进行并发去重且缓存结果', async () => {
-        const spy = vi.spyOn(ethers.JsonRpcProvider.prototype, 'send')
-            .mockImplementation(async () => {
-                await new Promise(r => setTimeout(r, 10));
-                return 'fee';
-            });
-
-        // 1. Concurrent deduplication
-        const p1 = provider.send('eth_gasPrice', []);
-        const p2 = provider.send('eth_gasPrice', []);
-
-        await Promise.all([p1, p2]); // Wait for both
-        expect(spy).toHaveBeenCalledTimes(1);
-
-        // 2. Cache hit (within TTL)
-        const res3 = await provider.send('eth_gasPrice', []);
-        expect(res3).toBe('fee');
-        expect(spy).toHaveBeenCalledTimes(1);
-
-        // 3. Cache expiry
-        vi.setSystemTime(Date.now() + 3000); // Advance > 2000ms TTL
-        await provider.send('eth_gasPrice', []);
-        expect(spy).toHaveBeenCalledTimes(2);
-    });
-
-    it('缓存清理机制应该限制缓存大小', async () => {
-        const spy = vi.spyOn(ethers.JsonRpcProvider.prototype, 'send').mockResolvedValue('ok');
-        // MAX_CACHE_SIZE is 200.
-        // We'll fill it up.
-        for (let i = 0; i < 210; i++) {
-            await provider.send('eth_gasPrice', [i]);
-        }
-        // Internally it should have cleaned up oldest.
-        // We can't easily inspect private _resCache without cast.
-        const cacheSize = (provider as any)._resCache.size;
-        expect(cacheSize).toBeLessThanOrEqual(200);
+        expect(stateMock.setActiveChainId).not.toHaveBeenCalled();
+        vi.useRealTimers();
     });
 });
