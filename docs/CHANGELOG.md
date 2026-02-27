@@ -3,6 +3,22 @@
 本文件记录面向产品与用户的关键变更，用于统一认知与验收范围。
 注意：本项目坚持 **RPC-only、后台 0 依赖、零遥测**。任何变更不得突破该原则。
 
+## 0.2.2（Beta）
+
+### 新增
+- TRON Finance 闭环快捷新增“自动金额模式”：当用户不填写金额时，流程会先领取奖励，再按最新余额自动计算可质押金额，并默认预留 `100 TRX` 以降低后续交易失败概率。
+- 单文件本地部署预览默认化：`npm run preview` 现在默认构建并预览 `dist-single`，默认端口 `3000`，另提供 `npm run preview:dist` 预览多文件产物。
+
+### 修复
+- 修复 TRON 权限签名失败（`not contained of permission`）场景：交易广播失败后会自动解析账户 `active_permission` 并按匹配权限重试构建/签名/广播（覆盖 stake/unstake/withdraw/vote/claim/send）。
+- 针对 TronGrid 429 限流问题增加主机级串行节流与退避重试，显著降低高频重复请求触发 `Too Many Requests` 的概率。
+- 修复 `listwitnesses`/`listWitnesses` 回退在 429 场景下导致的重复同类请求问题：命中 429 时停止大小写端点回退。
+- 修复依赖安全告警：`rollup` 升级至已修复版本（通过 `overrides` 锁定），消除高危漏洞告警。
+
+### 变更
+- 语言策略增强：全局以英文为默认，并在无用户显式设置时跟随浏览器/系统语言（`navigator.language` + `navigator.languages` + `languagechange`）。
+- TRON Finance 自动模式相关提示已接入 i18n 词条，避免硬编码文本造成语言不一致。
+
 ## 0.2.1（Beta）
 
 ### 新增

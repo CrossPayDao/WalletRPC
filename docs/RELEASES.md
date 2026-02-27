@@ -19,6 +19,59 @@
 
 ---
 
+## v0.2.2（Beta）- 发布候选
+- 发布时间：2026-02-27 09:50（+08:00）
+- 发布 commit：`to be resolved by tag v0.2.2`
+- 版本号变更：v0.2.1 -> v0.2.2
+
+### 代码级变更范围（自上次发布以来）
+- 基准（上次发布 commit）：`f60517b`（tag: `v0.2.1`）
+- 本次区间：`f60517b..HEAD`
+- 提交摘要（已入库）：
+  - `a8ae881 chore(deps): override rollup to patched version`
+  - `a25edff feat(tron-finance): auto restake with i18n-aware messaging and locale detection`
+  - `f5d4d2a fix(tron): add rate limiting and permission fallback for TronGrid RPC`
+  - `71e64fa test(data): add HttpConsole patch and WalletData TRON coverage tests`
+  - `8c46d75 test(wallet): improve EVM wallet hook and provider coverage`
+  - `7553393 test(tx): add expanded coverage for transaction manager error handling`
+  - `a6a3cd3 test(safe): add coverage for Safe deployment, proposal, and views`
+  - `8b8c234 test: boost coverage for wallet UI components and flows`
+  - `6d868ff test: add missing tests for TRON service and finance manager`
+  - `9beb34c test: improve test coverage for EVM wallet and Safe logic`
+  - `e12d0ba test: enhance coverage for wallet storage and localization`
+  - `6b30b49 test: expand coverage for transaction management and services`
+- 关键文件范围（本次候选）：
+  - `services/tronService.ts`
+  - `features/wallet/hooks/useTronFinanceManager.ts`
+  - `features/wallet/components/TronFinanceView.tsx`
+  - `contexts/LanguageContext.tsx`
+  - `locales/en/index.ts`
+  - `locales/zh-SG/index.ts`
+  - `package.json`
+  - `package-lock.json`
+  - `vite.config.ts`
+  - `README.md`
+  - `docs/CHANGELOG.md`
+
+### 关键新增功能说明（面向用户/产品）
+- TRON Finance 闭环快捷支持“空金额自动模式”：先领奖、再按最新余额自动质押并预留 `100 TRX`。
+- 默认本地预览切换为单文件部署模式（`localhost:3000`），更贴近实际部署路径。
+- 语言体验升级：默认英文，无显式设置时自动跟随浏览器/系统语言。
+
+### 致命 bug 修复说明（最近提交/候选）
+- Bug 1：TRON 分支权限签名交易失败（`Validate signature error ... not contained of permission`），导致领奖/质押/投票链路被阻断。
+  - 现象/影响：用户拥有分支权限但广播失败，主流程中断。
+  - 触发条件：节点返回的交易构建未应用正确 `permission_id` 或使用了不兼容字段名。
+  - 修复方式：引入权限回退机制，自动解析账户 `active_permission`，并对 `permission_id` 字段变体进行重试构建与重签广播。
+  - 回归测试：`tests/unit/tronService.internals.test.ts`、`tests/unit/tronService.test.ts`。
+- Bug 2：TronGrid 高频请求触发 429，导致金融页请求风暴与失败率上升。
+  - 现象/影响：接口频繁返回 `429 Too Many Requests`，页面刷新/操作失败。
+  - 触发条件：短时间内并发/重复触发相同主机请求。
+  - 修复方式：主机级串行锁 + 自适应间隔 + 429 退避重试；并在 witness 端点 429 时停止大小写回退请求。
+  - 回归测试：`tests/unit/tronService.internals.test.ts`。
+
+---
+
 ## v0.2.1（Beta）- 发布候选
 - 发布时间：2026-02-16 20:13（+08:00）
 - 发布 commit：`to be resolved by tag v0.2.1`
